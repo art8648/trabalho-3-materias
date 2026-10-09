@@ -23,4 +23,8 @@ body {
     left: 40%; 
     top: -20px; 
     transform: translateY(-50%); 
+    opacity: 0.6;
+}
+.nome{
+    position: absolute; 
 }
