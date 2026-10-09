@@ -8,18 +8,19 @@ body {
     rgba(34, 181, 139, 1) 50%, 
     rgba(51, 181, 81, 1) 64%, 
     rgba(63, 163, 41, 1) 100%);
-
-    background-repeat: no-repeat;
-    
-
-
 }
 .rayquaza {
-    position: absolute;
-    width: 55%;
+    width: 30%;
     height: 100%;
     right: -20%;
     top: 50%;
     transform: translateY(-50%);
     opacity: 0.7;
+}
+.deus { 
+    width: 35%; 
+    height: auto;
+    left: 40%; 
+    top: -20px; 
+    transform: translateY(-50%); 
 }
