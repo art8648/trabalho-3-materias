@@ -1,30 +1,41 @@
+html { 
+    width: 100%; 
+    height: 100%; 
+    margin: 0; 
+    overflow-x: clip; 
+} 
 body {
-    width: 100vw;
-    height: 100vh;
-    overflow: hidden;
-    background: linear-gradient(90deg,
+    width: 100%; 
+    min-height: 100vh; 
+    margin: 0; 
+    overflow-x: clip; 
+    background: linear-gradient(90deg, 
     rgba(26, 92, 143, 1) 0%, 
     rgba(46, 166, 134, 1) 33%, 
     rgba(34, 181, 139, 1) 50%, 
     rgba(51, 181, 81, 1) 64%, 
-    rgba(63, 163, 41, 1) 100%);
-}
+    rgba(63, 163, 41, 1) 100%); 
+    }
 .rayquaza {
-    width: 30%;
+    position: absolute;
+    width: 75%;
     height: 100%;
-    right: -20%;
+    right: -30%;
     top: 50%;
     transform: translateY(-50%);
-    opacity: 0.7;
+    opacity: 0.6;
 }
 .deus { 
-    width: 35%; 
+    position: absolute; 
+    width: 80%; 
     height: auto;
-    left: 40%; 
-    top: -20px; 
+    left: -10%; 
+    top: 60%; 
     transform: translateY(-50%); 
     opacity: 0.6;
 }
 .nome{
-    position: absolute; 
+    position: absolute;
+    height: 35%;
+    left: 30%; 
 }
