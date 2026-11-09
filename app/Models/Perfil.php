@@ -31,6 +31,15 @@ class Perfil{
         $consulta->execute(['id_usuario' => $idUsuario]);
         return $consulta->fetchAll();
     }
+    public function contarPorUsuario(int $idUsuario): int{
+    $sql = '
+        SELECT COUNT(*)
+        FROM perfil
+        WHERE id_usuario = :id_usuario';
+    $consulta = $this->pdo->prepare($sql);
+    $consulta->execute(['id_usuario' => $idUsuario]);
+    return (int) $consulta->fetchColumn();
+}
     public function buscarPorIdDoUsuario(
         int $idPerfil,
         int $idUsuario): ?array{
@@ -64,14 +73,62 @@ class Perfil{
         int $idUsuario,
         string $nomePerfil,
         ?int $idAvatar = null): int{
-        $sql = '
-            INSERT INTO perfil(id_usuario, nome_perfil, id_avatar)
-            VALUES(:id_usuario, :nome_perfil, :id_avatar)';
-        $consulta = $this->pdo->prepare($sql);
-        $consulta->execute([
-            'id_usuario' => $idUsuario,
-            'nome_perfil' => $nomePerfil,
-            'id_avatar' => $idAvatar]);
-        return (int) $this->pdo->lastInsertId();
+
+        $this->pdo->beginTransaction();
+        try{
+            $sqlBloqueio = '
+                SELECT id
+                FROM usuario
+                WHERE id = :id_usuario
+                FOR UPDATE';
+            $consulta = $this->pdo->prepare($sqlBloqueio);
+            $consulta->execute(['id_usuario' => $idUsuario]);
+    
+            if($consulta->fetchColumn() === false){
+                throw new \DomainException('Usuario nao encontrado.');
+            }
+            $sql = '
+                SELECT numero_perfil
+                FROM perfil
+                WHERE id_usuario = :id_usuario';
+    
+            $consulta = $this->pdo->prepare($sql);
+            $consulta->execute(['id_usuario' => $idUsuario]);
+    
+            $numerosOcupados = array_map('intval',
+            $consulta->fetchAll(PDO::FETCH_COLUMN));
+            $numeroPerfil = null;
+    
+            foreach([1, 2] as $numero){
+                if (!in_array($numero, $numerosOcupados, true)){
+                    $numeroPerfil = $numero;
+                    break;
+                }
+            }
+            if($numeroPerfil === null){
+                throw new \DomainException('Voce ja possui o limite de 2 perfis.');
+            }
+            $sql = '
+                INSERT INTO perfil(id_usuario, nome_perfil, id_avatar, numero_perfil)
+                VALUES(:id_usuario, :nome_perfil, :id_avatar, :numero_perfil)';
+    
+            $consulta = $this->pdo->prepare($sql);
+            $consulta->execute([
+                'id_usuario' => $idUsuario,
+                'nome_perfil' => $nomePerfil,
+                'id_avatar' => $idAvatar,
+                'numero_perfil' => $numeroPerfil]);
+
+            $id = (int) $this->pdo->lastInsertId();
+                $this->pdo->commit();
+            return $id;
+        } 
+        catch (\Throwable $erro){
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+
+            throw $erro;
+        }
     }
 }

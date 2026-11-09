@@ -62,16 +62,33 @@ CREATE TABLE perfil (
     id_avatar INT NULL,
     nome_perfil VARCHAR(100) NOT NULL,
     id_personagem INT NULL,
+    numero_perfil TINYINT UNSIGNED NOT NULL,
     dinheiro INT NOT NULL DEFAULT 0,
     jogo_concluido BOOLEAN NOT NULL DEFAULT FALSE,
     data_conclusao DATETIME NULL,
     data_criacao DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT chk_perfil_dinheiro CHECK (dinheiro >= 0),
+
+    CONSTRAINT chk_perfil_dinheiro
+        CHECK (dinheiro >= 0),
+
+    CONSTRAINT chk_numero_perfil
+        CHECK (numero_perfil IN (1, 2)),
+
+    CONSTRAINT uq_perfil_usuario_numero
+        UNIQUE (id_usuario, numero_perfil),
+
     UNIQUE (id_usuario, nome_perfil),
-    FOREIGN KEY (id_usuario) REFERENCES usuario(id) ON DELETE CASCADE,
-    FOREIGN KEY (id_avatar) REFERENCES avatar_opcao(id) ON DELETE SET NULL,
-    FOREIGN KEY (id_personagem) REFERENCES personagem(id) ON DELETE SET NULL
-);
+
+    FOREIGN KEY (id_usuario)
+        REFERENCES usuario(id) ON DELETE CASCADE,
+
+    FOREIGN KEY (id_avatar)
+        REFERENCES avatar_opcao(id) ON DELETE SET NULL,
+
+    FOREIGN KEY (id_personagem)
+        REFERENCES personagem(id) ON DELETE SET NULL
+
+) ENGINE=InnoDB;
 
 -- 3. CATALOGO DE ESPECIES
 -- Cada especie tem UM tipo e UM ataque fixo. O dano real e calculado
