@@ -35,7 +35,7 @@ CREATE TABLE usuario (
     nome VARCHAR(100) NOT NULL UNIQUE,
     senha_hash VARCHAR(255) NOT NULL,
     data_criacao DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+) ENGINE=InnoDB;
 
 -- jogavel = TRUE: selecionavel pelo jogador.
 -- jogavel = FALSE: adversario/NPC. Um personagem nao pode ser ambos.
@@ -499,6 +499,19 @@ BEGIN
     WHERE a.ordem = (SELECT MIN(ordem) FROM area_jogo)
     LIMIT 1
     ON DUPLICATE KEY UPDATE estado = IF(estado = 'BLOQUEADA', 'DISPONIVEL', estado);
+END//
+
+-- Ao cadastrar um usuario, cria automaticamente seus dois saves.
+-- Cada INSERT em perfil dispara trg_perfil_cria_inventario_time,
+-- que prepara o inventario, o time e os registros iniciais de cada save.
+CREATE TRIGGER trg_usuario_cria_dois_perfis
+AFTER INSERT ON usuario
+FOR EACH ROW
+BEGIN
+    INSERT INTO perfil (id_usuario, nome_perfil, numero_perfil)
+    VALUES
+        (NEW.id, 'Perfil 1', 1),
+        (NEW.id, 'Perfil 2', 2);
 END//
 
 -- O personagem escolhido no perfil precisa ser jogavel.

@@ -1,13 +1,20 @@
 <?php
 
 namespace Peakmon\Models;
+
 use PDO;
-class Perfil{
+
+class Perfil
+{
     private PDO $pdo;
-    public function __construct(PDO $pdo){
+
+    public function __construct(PDO $pdo)
+    {
         $this->pdo = $pdo;
     }
-    public function listarPorUsuario(int $idUsuario): array{
+
+    public function listarPorUsuario(int $idUsuario): array
+    {
         $sql = '
             SELECT
                 p.id,
@@ -26,24 +33,37 @@ class Perfil{
             LEFT JOIN personagem c
                 ON c.id = p.id_personagem
             WHERE p.id_usuario = :id_usuario
-            ORDER BY p.data_criacao ASC';
+            ORDER BY p.numero_perfil ASC
+        ';
+
         $consulta = $this->pdo->prepare($sql);
-        $consulta->execute(['id_usuario' => $idUsuario]);
+        $consulta->execute([
+            'id_usuario' => $idUsuario
+        ]);
+
         return $consulta->fetchAll();
     }
-    public function contarPorUsuario(int $idUsuario): int{
-    $sql = '
-        SELECT COUNT(*)
-        FROM perfil
-        WHERE id_usuario = :id_usuario';
-    $consulta = $this->pdo->prepare($sql);
-    $consulta->execute(['id_usuario' => $idUsuario]);
-    return (int) $consulta->fetchColumn();
-}
+
+    public function contarPorUsuario(int $idUsuario): int
+    {
+        $sql = '
+            SELECT COUNT(*)
+            FROM perfil
+            WHERE id_usuario = :id_usuario
+        ';
+
+        $consulta = $this->pdo->prepare($sql);
+        $consulta->execute([
+            'id_usuario' => $idUsuario
+        ]);
+
+        return (int) $consulta->fetchColumn();
+    }
+
     public function buscarPorIdDoUsuario(
         int $idPerfil,
-        int $idUsuario): ?array{
-
+        int $idUsuario
+    ): ?array {
         $sql = '
             SELECT
                 p.id,
@@ -63,72 +83,17 @@ class Perfil{
                 ON c.id = p.id_personagem
             WHERE p.id = :id_perfil
               AND p.id_usuario = :id_usuario
-            LIMIT 1';
+            LIMIT 1
+        ';
+
         $consulta = $this->pdo->prepare($sql);
-        $consulta->execute(['id_perfil' => $idPerfil,'id_usuario' => $idUsuario]);
+        $consulta->execute([
+            'id_perfil' => $idPerfil,
+            'id_usuario' => $idUsuario
+        ]);
+
         $perfil = $consulta->fetch();
+
         return $perfil === false ? null : $perfil;
-    }
-    public function criar(
-        int $idUsuario,
-        string $nomePerfil,
-        ?int $idAvatar = null): int{
-
-        $this->pdo->beginTransaction();
-        try{
-            $sqlBloqueio = '
-                SELECT id
-                FROM usuario
-                WHERE id = :id_usuario
-                FOR UPDATE';
-            $consulta = $this->pdo->prepare($sqlBloqueio);
-            $consulta->execute(['id_usuario' => $idUsuario]);
-    
-            if($consulta->fetchColumn() === false){
-                throw new \DomainException('Usuario nao encontrado.');
-            }
-            $sql = '
-                SELECT numero_perfil
-                FROM perfil
-                WHERE id_usuario = :id_usuario';
-    
-            $consulta = $this->pdo->prepare($sql);
-            $consulta->execute(['id_usuario' => $idUsuario]);
-    
-            $numerosOcupados = array_map('intval',
-            $consulta->fetchAll(PDO::FETCH_COLUMN));
-            $numeroPerfil = null;
-    
-            foreach([1, 2] as $numero){
-                if (!in_array($numero, $numerosOcupados, true)){
-                    $numeroPerfil = $numero;
-                    break;
-                }
-            }
-            if($numeroPerfil === null){
-                throw new \DomainException('Voce ja possui o limite de 2 perfis.');
-            }
-            $sql = '
-                INSERT INTO perfil(id_usuario, nome_perfil, id_avatar, numero_perfil)
-                VALUES(:id_usuario, :nome_perfil, :id_avatar, :numero_perfil)';
-    
-            $consulta = $this->pdo->prepare($sql);
-            $consulta->execute([
-                'id_usuario' => $idUsuario,
-                'nome_perfil' => $nomePerfil,
-                'id_avatar' => $idAvatar,
-                'numero_perfil' => $numeroPerfil]);
-
-            $id = (int) $this->pdo->lastInsertId();
-                $this->pdo->commit();
-            return $id;
-        } 
-        catch (\Throwable $erro){
-            if ($this->pdo->inTransaction()) {
-                $this->pdo->rollBack();
-            }
-
-            throw $erro;
-        }
     }
 }
