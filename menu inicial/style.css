@@ -27,9 +27,9 @@ body {
 }
 .deus { 
     position: absolute; 
-    width: 80%; 
+    width: 90%; 
     height: auto;
-    left: -10%; 
+    left: -5%; 
     top: 60%; 
     transform: translateY(-50%); 
     opacity: 0.6;
@@ -37,5 +37,33 @@ body {
 .nome{
     position: absolute;
     height: 35%;
-    left: 30%; 
+    left: 31%; 
+}
+.botao-perfil {
+    position: absolute;
+    top: 75%;
+    left: 960px;
+    transform: translate(-50%, -50%);
+
+    padding: 15px 35px;
+
+    background: #263d49;
+    color: white;
+
+    border: 3px solid #8de0a5;
+    border-radius: 8px;
+
+    text-decoration: none;
+    font-family: monospace;
+    font-size: 20px;
+    font-weight: bold;
+
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+.botao-perfil:hover {
+    background: #31cb5c;
+    color: #17252d;
+    transform: translate(-50%, -50%) scale(1.08);
 }

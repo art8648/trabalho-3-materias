@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Escolher Perfil</title>
+
+    <style>
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: #17252d;
+            color: white;
+            font-family: monospace;
+
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+
+        h1 {
+            margin-bottom: 40px;
+        }
+
+        .perfis {
+            display: flex;
+            gap: 30px;
+        }
+
+        .perfil {
+            width: 220px;
+            height: 230px;
+            background: #263d49;
+            border: 3px solid #52616a;
+            color: white;
+            cursor: pointer;
+            font-family: monospace;
+            transition: 0.2s;
+        }
+
+        .perfil:hover {
+            border-color: #8de0a5;
+            transform: translateY(-5px);
+        }
+
+        .avatar {
+            font-size: 60px;
+        }
+
+        .perfil h2 {
+            margin-top: 15px;
+        }
+
+        @media(max-width: 550px) {
+            .perfis {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>ESCOLHA SEU PERFIL</h1>
+
+    <div class="perfis">
+
+        <button class="perfil" onclick="escolher('perfil1')">
+            <div class="avatar">🧢</div>
+            <h2>Perfil 1</h2>
+            <p>Save independente</p>
+        </button>
+
+        <button class="perfil" onclick="escolher('perfil2')">
+            <div class="avatar">⚔️</div>
+            <h2>Perfil 2</h2>
+            <p>Save independente</p>
+        </button>
+
+    </div>
+
+    <script src="perfis.js"></script>
+
+    <script>
+        function escolher(id) {
+
+            SistemaPerfis.selecionarPerfil(id);
+
+            window.location.href = "mapateste.html";
+
+        }
+    </script>
+
+</body>
+</html>

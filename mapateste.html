@@ -126,11 +126,22 @@
     object-fit: contain;
     image-rendering: pixelated;
 }
+.menu a {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    justify-content: center;
+    align-items: center;
+    color: #20252a;
+    text-decoration: none;
+}
 </style>
 </head>
 <body>
 <div class="cloud one"></div><div class="cloud two"></div><div class="cloud three"></div><div class="ground"></div>
-<div class="menu" aria-label="Menu">≡</div>
+<div class="menu" aria-label="Menu">
+  <a href="perfis.html">≡</a>
+</div>
 <main class="layout">
   <aside class="panel team">
     <h2>TEAM</h2>
@@ -197,5 +208,13 @@
   <div><span>🔴</span> Pokébola: capturar Pokémon</div>
   <div><span>★</span> Chefe da área</div>
 </div>
+<script src="perfis.js"></script>
+
+<script>
+    // Verifica se existe um perfil selecionado
+    if (!SistemaPerfis.perfilAtual()) {
+        window.location.href = "perfis.html";
+    }
+</script>
 </body>
 </html>
