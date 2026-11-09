@@ -1163,3 +1163,4 @@ INSERT INTO item (nome, descricao, preco, tipo_efeito, valor_efeito, status_cura
 -- INSERT INTO compra_loja (id_perfil, id_item, quantidade) VALUES (1, 13, 1);
 -- COMMIT;
 -- Em PHP, prefiram PDO::beginTransaction(), commit() e rollBack() para agrupar a operacao.
+
