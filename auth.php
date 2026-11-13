@@ -32,7 +32,7 @@ try{
     $resultado = ['sucesso' => false,'mensagem' => 'Ocorreu um erro interno. Tente novamente.'];
 }
 if(($resultado['sucesso'] ?? false) && $acao === 'entrar'){
-    header('Location: perfis.html');
+    header('Location: perfis.php');
     exit;
 }
 $titulo = ($resultado['sucesso'] ?? false)
