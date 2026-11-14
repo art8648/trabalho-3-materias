@@ -1,10 +1,9 @@
 <?php
-
 declare(strict_types=1);
 
 use Peakmon\Models\Mapa;
 
-session_start();
+require_once __DIR__ . '/app/sessao.php';
 require_once __DIR__ . '/app/autoload.php';
 
 $ehPost = $_SERVER['REQUEST_METHOD'] === 'POST';

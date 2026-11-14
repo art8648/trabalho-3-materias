@@ -14,5 +14,6 @@ catch (Throwable $erro){
     error_log((string) $erro);
     http_response_code(500);
     echo '<h1>Erro de conexão</h1>';
+    echo '<p>' . htmlspecialchars($erro->getMessage() . ' | ' . ($erro->getPrevious()?->getMessage() ?? '')) . '</p>';
     echo '<p>Confira a configuração do MySQL e o banco selecionado.</p>';
 }

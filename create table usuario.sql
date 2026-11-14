@@ -111,6 +111,7 @@ CREATE TABLE pokemon (
     poder_ataque INT NOT NULL DEFAULT 60 CHECK (poder_ataque > 0),
     imagem VARCHAR(255) NOT NULL,
     cavalo BOOLEAN NOT NULL DEFAULT FALSE,
+    descricao VARCHAR(500) NOT NULL,
     possui_sexo BOOLEAN NOT NULL DEFAULT TRUE,
     capturavel BOOLEAN NOT NULL DEFAULT TRUE,
     FOREIGN KEY (tipo_id) REFERENCES tipo_pokemon(id)
@@ -1193,4 +1194,35 @@ INSERT INTO item (nome, descricao, preco, tipo_efeito, valor_efeito, status_cura
 -- INSERT INTO compra_loja (id_perfil, id_item, quantidade) VALUES (1, 13, 1);
 -- COMMIT;
 -- Em PHP, prefiram PDO::beginTransaction(), commit() e rollBack() para agrupar a operacao.
-
+INSERT INTO usuario (nome, senha_hash) VALUES ('jogador_local', 'sem_login');
+INSERT INTO personagem (nome, jogavel, secreto, imagem) VALUES
+('Link',       TRUE, FALSE, 'menu inicial/images/link.jpg'),
+('The Knight', TRUE, FALSE, 'menu inicial/images/knight.jpg'),
+('Mereoleona', TRUE, FALSE, 'menu inicial/images/mereoleona.jpg');
+INSERT INTO pokemon
+(api_id, nome, hp, atk, def, sp_atk, sp_def, vel, prioridade, tipo_id,
+ nome_ataque, descricao, categoria_ataque, poder_ataque, imagem, possui_sexo, capturavel)
+VALUES
+(1, 'Treecko',      40,  45,  35,  65,  55,  70, 0,  5, 'Giga Drain',    'Lagarto da floresta que escala troncos e paredes com as garras das patas. Mantem a calma mesmo em perigo e usa a cauda para se equilibrar.', 'ESPECIAL',  75, 'images/pokemon/treecko.png',    TRUE,  TRUE),
+(2, 'Torchic',      45,  60,  40,  70,  50,  45, 0,  2, 'Fire Punch',    'Pintinho que guarda uma chama dentro do corpo. E quentinho de abracar, mas cospe bolas de fogo quando se sente ameacado.', 'FISICO',    75, 'images/pokemon/torchic.png',    TRUE,  TRUE),
+(3, 'Mudkip',       50,  70,  50,  50,  50,  40, 0,  3, 'Waterfall',     'Peixe anfibio que vive na lama. A nadadeira da cabeca sente mudancas na agua e no ar, e ele tem forca de sobra para arrastar pedras enormes.', 'FISICO',    80, 'images/pokemon/mudkip.png',     TRUE,  TRUE),
+(4, 'Taillow',      40,  55,  30,  30,  30,  85, 0, 10, 'Aerial Ace',    'Andorinha pequena e corajosa. Enfrenta inimigos bem maiores e voa em alta velocidade, mas fica de mau humor quando esta com fome.', 'FISICO',    60, 'images/pokemon/taillow.png',    TRUE,  TRUE),
+(5, 'Wingull',      40,  30,  30,  55,  30,  85, 0,  3, 'Water Pulse',   'Gaivota que plana sobre o mar aproveitando o vento. Carrega comida no bico e faz o ninho em penhascos a beira da agua.', 'ESPECIAL',  60, 'images/pokemon/wingull.png',    TRUE,  TRUE),
+(6, 'Ralts',        28,  25,  25,  45,  35,  40, 0, 18, 'Draining Kiss', 'Pokemon pequeno que percebe as emocoes das pessoas. Se sente alegria por perto, fica contente; se sente medo, se esconde.', 'ESPECIAL',  50, 'images/pokemon/ralts.png',      TRUE,  TRUE),
+(7, 'Abra',         25,  20,  15, 105,  55,  90, 0, 11, 'Psybeam',       'Dorme quase o tempo todo, mas mesmo assim percebe o perigo. Se teletransporta para longe antes que alguem consiga encostar nele.', 'ESPECIAL',  65, 'images/pokemon/abra.png',       TRUE,  TRUE),
+(8, 'Magikarp',     20,  10,  55,  15,  20,  80, 0,  3, 'Flail',         'Peixe fraco e desajeitado que so sabe se debater. Muita gente o considera o pior Pokemon de todos, mas ele sobrevive em qualquer agua.', 'FISICO',    40, 'images/pokemon/magikarp.png',   TRUE,  TRUE),
+(9, 'Geodude',      40,  80, 100,  30,  30,  20, 0, 13, 'Rock Slide',    'Pedra com bracos que se camufla em estradas de montanha. Muita gente tropeca nele sem querer, e ele se irrita com facilidade.', 'FISICO',    75, 'images/pokemon/geodude.png',    TRUE,  TRUE),
+(10, 'Beldum',       40,  55,  80,  35,  60,  30, 0, 17, 'Metal Claw',    'Pokemon de ferro que flutua usando magnetismo. Pensa com um cerebro de metal e e bem frio e calculista.', 'FISICO',    50, 'images/pokemon/beldum.png',     FALSE, TRUE),
+(11, 'Machop',       70,  80,  50,  35,  35,  35, 0,  7, 'Brick Break',   'Tem musculos de sobra e treina todos os dias. Consegue levantar objetos muito mais pesados do que ele.', 'FISICO',    75, 'images/pokemon/machop.png',     TRUE,  TRUE),
+(12, 'Electrike',    40,  45,  40,  65,  40,  65, 0,  4, 'Thunder Fang',  'Cachorrinho eletrico que acumula energia no pelo. Corre muito rapido e solta faiscas quando esta animado.', 'FISICO',    65, 'images/pokemon/electrike.png',  TRUE,  TRUE),
+(13, 'Bagon',        45,  75,  60,  40,  30,  50, 0, 15, 'Dragon Claw',   'Sonha em voar um dia e vive batendo a cabeca contra rochas para treinar. Quer evoluir e ganhar asas.', 'FISICO',    80, 'images/pokemon/bagon.png',      TRUE,  TRUE),
+(14, 'Arnaldo',     120, 120, 120, 120, 120, 120, 0, 20, 'Golpe Supremo', 'O deus do universo. O criador de tudo e a coisa mais forte que existe na Terra.', 'ESPECIAL', 100, 'images/pokemon/arnaldo.png',    TRUE,  TRUE),
+(15, 'Absol',        65, 130,  60,  75,  60,  75, 0, 16, 'Night Slash',   'Aparece em lugares onde um desastre vai acontecer, por isso e chamado de mensageiro do azar. Na verdade, so quer avisar as pessoas.', 'FISICO',    70, 'images/pokemon/absol.png',      TRUE,  TRUE),
+(16, 'Heracross',    80, 125,  75,  40,  95,  85, 0, 12, 'X-Scissor',     'Besouro forte que adora seiva de arvore. Usa o chifre para arremessar oponentes bem longe.', 'FISICO',    80, 'images/pokemon/heracross.png',  TRUE,  TRUE),
+(17, 'Snorunt',      50,  50,  50,  50,  50,  50, 0,  6, 'Icy Wind',      'Pokemon do gelo que vive em lugares frios e escuros. Dizem que traz sorte para as casas onde se instala.', 'ESPECIAL',  55, 'images/pokemon/snorunt.png',    TRUE,  TRUE),
+(18, 'Gulpin',       70,  43,  53,  43,  53,  40, 0,  8, 'Sludge',        'Praticamente um estomago ambulante. Engole tudo o que encontra, e o suco do seu estomago dissolve quase qualquer coisa.', 'ESPECIAL',  65, 'images/pokemon/gulpin.png',     TRUE,  TRUE),
+(19, 'Rhyhorn',      80,  85,  95,  30,  30,  25, 0,  9, 'Bulldoze',      'Rinoceronte de pedra que corre sempre em linha reta sem pensar. Derruba predios na corrida, mas esquece rapido o que estava fazendo.', 'FISICO',    60, 'images/pokemon/rhyhorn.png',    TRUE,  TRUE),
+(20, 'Jigglypuff',  115,  45,  20,  45,  25,  20, 0,  1, 'Hyper Voice',   'Canta uma melodia que faz todo mundo dormir. Fica furioso quando alguem pega no sono antes de a musica acabar.', 'ESPECIAL',  90, 'images/pokemon/jigglypuff.png', TRUE,  TRUE),
+(21, 'Shuppet',      44,  75,  35,  63,  33,  45, 0, 14, 'Shadow Ball',   'Se alimenta de sentimentos negativos, como inveja e rancor. Costuma se esconder em lugares escuros.', 'ESPECIAL',  80, 'images/pokemon/shuppet.png',    TRUE,  TRUE),
+(22, 'Rayquaza',    105, 150,  90, 150,  90,  95, 0, 15, 'Dragon Ascent', 'Dragao lendario que vive no ceu, acima das nuvens, e quase nunca e visto. Ele parece meio racista.', 'FISICO',   120, 'images/pokemon/rayquaza.png',   FALSE, FALSE),
+(23, 'Deoxys',       50, 150,  50, 150,  50, 150, 0, 19, 'Psycho Boost',  'Virus vindo do espaco que sofreu mutacao ao ser atingido por um raio. Inteligente e perigoso, nao pertence a este planeta.', 'ESPECIAL', 140, 'images/pokemon/deoxys.png',     FALSE, FALSE);

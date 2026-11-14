@@ -1,18 +1,10 @@
-
 <?php
 declare(strict_types=1);
 
 use Peakmon\Controllers\PerfilController;
 
-session_start();
-
 require_once __DIR__ . '/app/autoload.php';
-
-// Verifica se o usuário está logado
-if (!isset($_SESSION['usuario_id'])) {
-    header('Location: menu inicial/login.html');
-    exit;
-}
+require_once __DIR__ . '/app/sessao.php';
 
 $erro = '';
 $perfis = [];
@@ -42,8 +34,12 @@ try {
             );
 
             if ($resultado['sucesso']) {
-                header('Location: mapa.php');
-                exit;
+                // Save novo (sem personagem) vai escolher; save que ja escolheu vai direto ao mapa
+                $destino = empty($resultado['perfil']['id_personagem'])
+                     ? 'menu%20inicial/selecao.html'
+                    : 'mapa.php';
+                header('Location: ' . $destino);
+            exit;
             }
 
             $erro = $resultado['mensagem'];
