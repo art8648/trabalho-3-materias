@@ -27,14 +27,20 @@ class AuthController{
             return['sucesso' => false, 'mensagem' => 'Esse nome já está cadastrado.'];
     }
         try{
-            $id = $this->usuario->cadastrar($nome, $senha);
+           $id = $this->usuario->cadastrar($nome, $senha);
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+}
+        session_regenerate_id(true);
+        $_SESSION['usuario_id'] = $id;
+        $_SESSION['usuario_nome'] = $nome;
             return['sucesso' => true,'mensagem' => 'Cadastro realizado com sucesso!','id' => $id];
-    } 
+} 
         catch (PDOException $erro){
             if ($erro->getCode() === '23000'){
-                return['sucesso' => false, 'mensagem' => 'Esse nome já está cadastrado.'];
-    }
-            throw $erro;
+            return['sucesso' => false, 'mensagem' => 'Esse nome já está cadastrado.'];
+}
+        throw $erro;
         }
     }
     public function entrar(

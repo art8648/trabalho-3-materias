@@ -31,10 +31,10 @@ try{
     http_response_code(500);
     $resultado = ['sucesso' => false,'mensagem' => 'Ocorreu um erro interno. Tente novamente.'];
 }
-if(($resultado['sucesso'] ?? false) && $acao === 'entrar'){
+    if (($resultado['sucesso'] ?? false) && in_array($acao, ['registrar', 'entrar'], true)){
     header('Location: perfis.php');
     exit;
-}
+    }
 $titulo = ($resultado['sucesso'] ?? false)
     ? 'Operação concluída'
     : 'Não foi possível continuar';
