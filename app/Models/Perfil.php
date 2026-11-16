@@ -2,6 +2,7 @@
 
 namespace Peakmon\Models;
 
+use DomainException;
 use PDO;
 
 class Perfil
@@ -95,5 +96,53 @@ class Perfil
         $perfil = $consulta->fetch();
 
         return $perfil === false ? null : $perfil;
+    }
+
+    /**
+     * Reinicia as escolhas de UM perfil: apaga os Pokemon capturados
+     * (o time esvazia por cascata) e limpa o personagem.
+     */
+    public function reiniciarEscolhas(int $idPerfil, int $idUsuario): void
+    {
+        $this->pdo->beginTransaction();
+
+        try {
+            // Confere que o perfil e deste usuario.
+            $consulta = $this->pdo->prepare('
+                SELECT id FROM perfil
+                WHERE id = :id_perfil AND id_usuario = :id_usuario
+                LIMIT 1
+                FOR UPDATE
+            ');
+            $consulta->execute([
+                'id_perfil' => $idPerfil,
+                'id_usuario' => $idUsuario
+            ]);
+
+            if ($consulta->fetchColumn() === false) {
+                throw new DomainException('Perfil nao encontrado.');
+            }
+
+            $apagar = $this->pdo->prepare('DELETE FROM pokemon_capturado WHERE id_perfil = :id_perfil');
+            $apagar->execute(['id_perfil' => $idPerfil]);
+
+            $limpar = $this->pdo->prepare('
+                UPDATE perfil SET id_personagem = NULL
+                WHERE id = :id_perfil AND id_usuario = :id_usuario
+            ');
+            $limpar->execute([
+                'id_perfil' => $idPerfil,
+                'id_usuario' => $idUsuario
+            ]);
+
+            $this->pdo->commit();
+
+        } catch (\Throwable $erro) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+
+            throw $erro;
+        }
     }
 }

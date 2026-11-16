@@ -8,18 +8,21 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400..700&display=swap">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.3.1/css/all.min.css">
-    <link rel="stylesheet" href="style.css">
+    <!-- MUDOU: o caminho do CSS agora conta a pasta "menu inicial" -->
+    <link rel="stylesheet" href="menu%20inicial/style.css">
 </head>
 <body>
     <main>
         <p style="text-align:center; margin: 18px 0;">
-            <a href="menu.html">Voltar ao menu inicial</a>
+            <!-- MUDOU: o caminho do menu agora conta a pasta "menu inicial" -->
+            <a href="menu%20inicial/menu.html">Voltar ao menu inicial</a>
         </p>
         <section class="container" id="signup">
             <h1 class="form-title">Cadastro</h1>
 
             <!-- Cadastro -->
-<form action="/trabalho-3-materias-integracao-peakmon/auth.php" method="POST">
+            <!-- MUDOU: action sem o nome da pasta do seu colega -->
+            <form action="auth.php" method="POST">
                 <input type="hidden" name="acao" value="registrar">
 
                 <div class="input-group">
@@ -32,7 +35,7 @@
                         required
                     >
                 </div>
-                
+
                 <div class="input-group">
                     <label for="cadastro-senha">Senha</label>
                     <input
@@ -54,7 +57,8 @@
             <h1 class="form-title">Entrar</h1>
 
             <!-- Login -->
-<form action="/trabalho-3-materias-integracao-peakmon/auth.php" method="POST">
+            <!-- MUDOU: mesmo ajuste do action -->
+            <form action="auth.php" method="POST">
                 <input type="hidden" name="acao" value="entrar">
 
                 <div class="input-group">

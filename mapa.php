@@ -4,6 +4,7 @@ declare(strict_types=1);
 use Peakmon\Models\Inicial;
 use Peakmon\Models\Mapa;
 use Peakmon\Models\Time;
+use Peakmon\Models\Perfil;
 
 require_once __DIR__ . '/app/sessao.php';
 require_once __DIR__ . '/app/autoload.php';
@@ -88,7 +89,17 @@ try {
             ], JSON_UNESCAPED_UNICODE);
             exit;
         }
+        // Botao REINICIAR: apaga o inicial e o personagem SO do perfil ativo.
+        if (($_POST['acao'] ?? '') === 'reiniciar_perfil') {
+            (new Perfil($pdo))->reiniciarEscolhas($idPerfil, $idUsuario);
 
+            echo json_encode([
+                'sucesso' => true,
+                'mensagem' => 'Perfil reiniciado.',
+                'redirecionar' => 'menu%20inicial/selecao.html'
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
         // Nao deixa andar pelo mapa sem ter escolhido o inicial.
         if (!$inicial->perfilTemInicial($idPerfil)) {
             throw new DomainException('Escolha seu Pokemon inicial antes de avancar no mapa.');
@@ -781,6 +792,16 @@ $corPorTipo = static function (string $tipo): string {
             .inicial-overlay { animation: none; }
             .inicial-card, .inicial-card::before { transition: none; }
         }
+        @media (max-width: 520px) {
+            .topo { align-items: stretch; }
+            .informacao { flex: 1; }
+            .mapa { min-height: 620px; }
+        }
+
+        .topo-acoes { display: flex; gap: 10px; flex-wrap: wrap; }
+        button.botao-menu { font: inherit; font-weight: bold; cursor: pointer; }
+        .botao-reiniciar:hover { background: #f6d3cb; }
+        .botao-reiniciar:disabled { opacity: .5; cursor: wait; }
     </style>
 </head>
 <body>
@@ -790,7 +811,10 @@ $corPorTipo = static function (string $tipo): string {
         Perfil: <strong><?= $dados !== null ? $escapar($dados['perfil']['nome_perfil']) : $escapar($_SESSION['perfil_nome'] ?? 'Perfil') ?></strong>
         <span> | Pokédollars: <strong><?= $dados !== null ? (int) $dados['perfil']['dinheiro'] : 0 ?></strong></span>
     </div>
-    <a class="botao-menu" href="perfis.php">⇦ Trocar perfil</a>
+    <div class="topo-acoes">
+        <a class="botao-menu" href="perfis.php">⇦ Trocar perfil</a>
+        <button type="button" class="botao-menu botao-reiniciar" id="botao-reiniciar">↻ Reiniciar perfil</button>
+    </div>
 </header>
 
 <h1>
@@ -1064,7 +1088,6 @@ $corPorTipo = static function (string $tipo): string {
         // Foco no primeiro card para dar para escolher so com o teclado.
         if (cards.length > 0) cards[0].focus();
     })();
-
     // ===== Painel TIME: trocar Pokemon de posicao =====
     (function () {
         const lista = document.getElementById('time-lista');
@@ -1167,6 +1190,48 @@ $corPorTipo = static function (string $tipo): string {
                 }
             });
             botao.addEventListener('click', () => clicou(slot));
+        });
+    })();
+        // ===== Botao REINICIAR PERFIL =====
+    (function () {
+        const botao = document.getElementById('botao-reiniciar');
+        if (!botao) return;
+
+        botao.addEventListener('click', async () => {
+            const certeza = confirm(
+                'Reiniciar este perfil?\n\n' +
+                'Seu personagem e seus Pokémon (inclusive o inicial) serão apagados. ' +
+                'Os outros perfis não são afetados.'
+            );
+            if (!certeza) return;
+
+            botao.disabled = true;
+
+            const dados = new URLSearchParams();
+            dados.set('acao', 'reiniciar_perfil');
+
+            try {
+                const resposta = await fetch('mapa.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: dados.toString()
+                });
+
+                const resultado = await resposta.json();
+
+                if (!resposta.ok || !resultado.sucesso) {
+                    throw new Error(resultado.mensagem || 'Nao foi possivel reiniciar o perfil.');
+                }
+
+                window.location.href = resultado.redirecionar;
+
+            } catch (erro) {
+                alert(erro.message);
+                botao.disabled = false;
+            }
         });
     })();
 </script>
