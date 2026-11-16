@@ -10,6 +10,58 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.3.1/css/all.min.css">
     
 <style>
+    
+/* Cadastro com Pokémon nas laterais */
+.cadastro-layout {
+    position: relative;
+    width: 100%;
+    isolation: isolate;
+}
+
+.cadastro-layout #signup {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+}
+
+/* Estilo geral dos Pokémon */
+.pokemon-lateral {
+    position: absolute;
+    top: 50%;
+    width: clamp(200px, 27vw, 440px);
+    height: auto;
+    max-height: 80vh;
+    object-fit: contain;
+    transform: translateY(-50%);
+    z-index: 1;
+    pointer-events: none;
+
+    filter: drop-shadow(0 0 15px rgba(0, 0, 0, 0.3));
+}
+
+/* Pokémon azul */
+.pokemon-esquerda {
+    right: calc(100% + 15px);
+}
+
+/* Rayquaza */
+.pokemon-direita {
+    left: calc(100% + 15px);
+}
+
+/* Ajustes para telas menores */
+@media (max-width: 1100px) {
+    .pokemon-lateral {
+        width: 22vw;
+    }
+}
+
+@media (max-width: 750px) {
+    .pokemon-lateral {
+        display: none;
+    }
+}
+    
     :root {
         --verde-claro: #8de0a5;
         --verde-destaque: #31cb5c;
@@ -176,6 +228,17 @@
 </head>
 <body>
     <main>
+        <div class="cadastro-layout">
+
+    <!-- Pokémon da esquerda -->
+    <img
+        src="imagens/deus.png"
+        alt="Pokémon da esquerda"
+        class="pokemon-lateral pokemon-esquerda"
+    >
+
+    <section class="container" id="signup">
+        <h1 class="form-title">Cadastro</h1>
         <p style="text-align:center; margin: 18px 0;">
             <a href="menu.html">Voltar ao menu inicial</a>
         </p>
@@ -245,6 +308,16 @@
                 <button type="submit">Entrar</button>
             </form>
         </section>
+        </section>
+
+    <!-- Rayquaza da direita -->
+    <img
+        src="imagens/rayquaza.png"
+        alt="Rayquaza"
+        class="pokemon-lateral pokemon-direita"
+    >
+
+        </div>
     </main>
 </body>
 </html>
