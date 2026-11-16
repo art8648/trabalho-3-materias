@@ -28,10 +28,10 @@ class AuthController{
     }
         try{
            $id = $this->usuario->cadastrar($nome, $senha);
-        if (session_status() === PHP_SESSION_NONE) {
-            session_start();
-}
+       
         session_regenerate_id(true);
+        // Um perfil selecionado em uma sessão anterior nunca deve ser herdado.
+        unset($_SESSION['perfil_id'], $_SESSION['perfil_nome']);
         $_SESSION['usuario_id'] = $id;
         $_SESSION['usuario_nome'] = $nome;
             return['sucesso' => true,'mensagem' => 'Cadastro realizado com sucesso!','id' => $id];
@@ -60,6 +60,8 @@ class AuthController{
             session_start();
         }
         session_regenerate_id(true);
+        // Ao trocar de conta, obriga a escolher novamente um dos saves do usuário.
+        unset($_SESSION['perfil_id'], $_SESSION['perfil_nome']);
         $_SESSION['usuario_id'] = (int) $usuario['id'];
         $_SESSION['usuario_nome'] = $usuario['nome'];
 
