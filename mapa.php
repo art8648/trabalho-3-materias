@@ -1,342 +1,1175 @@
 <?php
-
 declare(strict_types=1);
 
-namespace Peakmon\Models;
+use Peakmon\Models\Inicial;
+use Peakmon\Models\Mapa;
+use Peakmon\Models\Time;
 
-use DomainException;
-use PDO;
+require_once __DIR__ . '/app/sessao.php';
+require_once __DIR__ . '/app/autoload.php';
 
-class Mapa
-{
-    private PDO $pdo;
+$ehPost = $_SERVER['REQUEST_METHOD'] === 'POST';
 
-    public function __construct(PDO $pdo)
-    {
-        $this->pdo = $pdo;
+// O usuario e o perfil ativo sao obtidos da sessao, nunca do navegador.
+if (!isset($_SESSION['usuario_id'], $_SESSION['perfil_id'])) {
+    if ($ehPost) {
+        http_response_code(401);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode([
+            'sucesso' => false,
+            'mensagem' => 'Sua sessao expirou. Selecione um perfil novamente.'
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
     }
 
-    /**
-     * Carrega o perfil, a area, o progresso, os nos e as conexoes.
-     * O id do perfil e validado junto ao id do usuario logado.
-     */
-    public function carregarMapa(int $idPerfil, int $idUsuario): array
-    {
-        $consultaPerfil = $this->pdo->prepare('
-            SELECT id, nome_perfil, dinheiro, jogo_concluido
-            FROM perfil
-            WHERE id = :id_perfil
-              AND id_usuario = :id_usuario
-            LIMIT 1
-        ');
+    header('Location: perfis.php');
+    exit;
+}
 
-        $consultaPerfil->execute([
-            'id_perfil' => $idPerfil,
-            'id_usuario' => $idUsuario
-        ]);
+$idUsuario = (int) $_SESSION['usuario_id'];
+$idPerfil = (int) $_SESSION['perfil_id'];
 
-        $perfil = $consultaPerfil->fetch();
+$mostrarInicial = false;
+$iniciais = [];
+$slotsTime = [];
 
-        if ($perfil === false) {
-            throw new DomainException('O perfil selecionado nao pertence a este usuario.');
-        }
+try {
+    $pdo = require __DIR__ . '/config/database.php';
+    $mapa = new Mapa($pdo);
+    $inicial = new Inicial($pdo);
+    $time = new Time($pdo);
 
-        // O projeto utiliza uma unica area. Por isso, carregamos a primeira area cadastrada.
-        $consultaArea = $this->pdo->query('
-            SELECT id, nome
-            FROM area_jogo
-            ORDER BY ordem ASC
-            LIMIT 1
-        ');
+    // O mesmo arquivo recebe o clique do mapa e salva o novo ponto.
+    if ($ehPost) {
+        header('Content-Type: application/json; charset=utf-8');
 
-        $area = $consultaArea->fetch();
+        // Clique em CONFIRMAR no pop-up: salva o Pokemon inicial do perfil.
+        if (($_POST['acao'] ?? '') === 'escolher_inicial') {
+            $idPokemon = filter_var(
+                $_POST['id_pokemon'] ?? null,
+                FILTER_VALIDATE_INT
+            );
 
-        if ($area === false) {
-            return [
-                'perfil' => $perfil,
-                'area' => null,
-                'progresso' => null,
-                'nos' => [],
-                'conexoes' => [],
-                'batalha_vencida' => false
-            ];
-        }
-
-        $idArea = (int) $area['id'];
-
-        // Garante que o perfil tenha um ponto inicial, sem sobrescrever um save existente.
-        $this->garantirProgressoInicial($idPerfil, $idArea);
-
-        $consultaProgresso = $this->pdo->prepare('
-            SELECT
-                pa.id_no_atual,
-                pa.estado,
-                n.titulo AS no_atual_titulo,
-                n.tipo_no AS no_atual_tipo
-            FROM progresso_area pa
-            LEFT JOIN area_no n
-                ON n.id = pa.id_no_atual
-               AND n.id_area = pa.id_area
-            WHERE pa.id_perfil = :id_perfil
-              AND pa.id_area = :id_area
-            LIMIT 1
-        ');
-
-        $consultaProgresso->execute([
-            'id_perfil' => $idPerfil,
-            'id_area' => $idArea
-        ]);
-
-        $progresso = $consultaProgresso->fetch();
-
-        if ($progresso === false) {
-            throw new DomainException('Nao foi possivel preparar o progresso deste perfil.');
-        }
-
-        $batalhaVencida = false;
-        if (in_array($progresso['no_atual_tipo'], ['BATALHA', 'CHEFE'], true)) {
-            $consultaVitoria = $this->pdo->prepare("
-                SELECT COUNT(*)
-                FROM batalha
-                WHERE id_perfil = :id_perfil
-                  AND id_area = :id_area
-                  AND id_no = :id_no
-                  AND resultado = :resultado
-            " );
-            $consultaVitoria->execute([
-                'id_perfil' => $idPerfil,
-                'id_area' => $idArea,
-                'id_no' => (int) $progresso['id_no_atual'],
-                'resultado' => 'VITORIA'
-            ]);
-            $batalhaVencida = (int) $consultaVitoria->fetchColumn() > 0;
-        }
-
-        $consultaNos = $this->pdo->prepare('
-            SELECT id, codigo, tipo_no, titulo, descricao, pos_x, pos_y
-            FROM area_no
-            WHERE id_area = :id_area
-            ORDER BY pos_y DESC, id ASC
-        ');
-
-        $consultaNos->execute(['id_area' => $idArea]);
-        $nos = $consultaNos->fetchAll();
-
-        $consultaConexoes = $this->pdo->prepare('
-            SELECT
-                ac.id_no_origem,
-                ac.id_no_destino,
-                ac.texto_opcao,
-                origem.pos_x AS origem_x,
-                origem.pos_y AS origem_y,
-                destino.pos_x AS destino_x,
-                destino.pos_y AS destino_y
-            FROM area_conexao ac
-            INNER JOIN area_no origem
-                ON origem.id = ac.id_no_origem
-               AND origem.id_area = ac.id_area
-            INNER JOIN area_no destino
-                ON destino.id = ac.id_no_destino
-               AND destino.id_area = ac.id_area
-            WHERE ac.id_area = :id_area
-        ');
-
-        $consultaConexoes->execute(['id_area' => $idArea]);
-        $conexoes = $consultaConexoes->fetchAll();
-
-        return [
-            'perfil' => $perfil,
-            'area' => $area,
-            'progresso' => $progresso,
-            'nos' => $nos,
-            'conexoes' => $conexoes,
-            'batalha_vencida' => $batalhaVencida
-        ];
-    }
-
-    /**
-     * Avanca somente para um no ligado diretamente ao no atual.
-     * O perfil vem da sessao e sua propriedade e validada no banco.
-     */
-    public function avancar(int $idPerfil, int $idUsuario, int $idNoDestino): array
-    {
-        if ($idPerfil <= 0 || $idUsuario <= 0 || $idNoDestino <= 0) {
-            throw new DomainException('Dados invalidos para avancar no mapa.');
-        }
-
-        $this->pdo->beginTransaction();
-
-        try {
-            $consultaProgresso = $this->pdo->prepare('
-                SELECT pa.id_area, pa.id_no_atual, pa.estado
-                FROM progresso_area pa
-                INNER JOIN perfil p ON p.id = pa.id_perfil
-                WHERE pa.id_perfil = :id_perfil
-                  AND p.id_usuario = :id_usuario
-                ORDER BY pa.id_area ASC
-                LIMIT 1
-                FOR UPDATE
-            ');
-
-            $consultaProgresso->execute([
-                'id_perfil' => $idPerfil,
-                'id_usuario' => $idUsuario
-            ]);
-
-            $progresso = $consultaProgresso->fetch();
-
-            if ($progresso === false || $progresso['id_no_atual'] === null) {
-                throw new DomainException('Este perfil ainda nao possui um ponto atual no mapa.');
+            if ($idPokemon === false || $idPokemon === null) {
+                http_response_code(400);
+                echo json_encode([
+                    'sucesso' => false,
+                    'mensagem' => 'Pokemon invalido.'
+                ], JSON_UNESCAPED_UNICODE);
+                exit;
             }
 
-            if ($progresso['estado'] === 'CONCLUIDA') {
-                throw new DomainException('Este mapa ja foi concluido.');
+            echo json_encode(
+                $inicial->escolher($idPerfil, $idUsuario, (int) $idPokemon),
+                JSON_UNESCAPED_UNICODE
+            );
+            exit;
+        }
+
+        // Painel TIME: troca dois Pokemon de posicao (ou move para uma posicao vazia).
+        if (($_POST['acao'] ?? '') === 'mover_time') {
+            $de = filter_var($_POST['de'] ?? null, FILTER_VALIDATE_INT);
+            $para = filter_var($_POST['para'] ?? null, FILTER_VALIDATE_INT);
+
+            if ($de === false || $de === null || $para === false || $para === null) {
+                http_response_code(400);
+                echo json_encode([
+                    'sucesso' => false,
+                    'mensagem' => 'Posicao invalida.'
+                ], JSON_UNESCAPED_UNICODE);
+                exit;
             }
 
-            $idArea = (int) $progresso['id_area'];
-            $idNoAtual = (int) $progresso['id_no_atual'];
+            $time->mover($idPerfil, $idUsuario, (int) $de, (int) $para);
 
-            // Se o ponto atual for uma batalha, exige uma vitoria registrada antes de seguir.
-            $consultaTipoAtual = $this->pdo->prepare("
-                SELECT tipo_no
-                FROM area_no
-                WHERE id = :id_no_atual AND id_area = :id_area
-                LIMIT 1
-            " );
-            $consultaTipoAtual->execute([
-                'id_no_atual' => $idNoAtual,
-                'id_area' => $idArea
-            ]);
-            $tipoNoAtual = $consultaTipoAtual->fetchColumn();
-
-            if (in_array($tipoNoAtual, ['BATALHA', 'CHEFE'], true)) {
-                $consultaVitoria = $this->pdo->prepare("
-                    SELECT COUNT(*)
-                    FROM batalha
-                    WHERE id_perfil = :id_perfil
-                      AND id_area = :id_area
-                      AND id_no = :id_no
-                      AND resultado = :resultado
-                " );
-                $consultaVitoria->execute([
-                    'id_perfil' => $idPerfil,
-                    'id_area' => $idArea,
-                    'id_no' => $idNoAtual,
-                    'resultado' => 'VITORIA'
-                ]);
-
-                if ((int) $consultaVitoria->fetchColumn() === 0) {
-                    throw new DomainException('Voce precisa vencer esta batalha antes de seguir.');
-                }
-            }
-
-            // Confere se o destino e uma conexao permitida a partir do no atual.
-            $consultaDestino = $this->pdo->prepare('
-                SELECT n.id, n.tipo_no, n.titulo
-                FROM area_conexao ac
-                INNER JOIN area_no n
-                    ON n.id = ac.id_no_destino
-                   AND n.id_area = ac.id_area
-                WHERE ac.id_area = :id_area
-                  AND ac.id_no_origem = :id_no_atual
-                  AND ac.id_no_destino = :id_no_destino
-                LIMIT 1
-            ');
-
-            $consultaDestino->execute([
-                'id_area' => $idArea,
-                'id_no_atual' => $idNoAtual,
-                'id_no_destino' => $idNoDestino
-            ]);
-
-            $destino = $consultaDestino->fetch();
-
-            if ($destino === false) {
-                throw new DomainException('Esse caminho nao esta conectado ao ponto atual.');
-            }
-
-            $novoEstado = $destino['tipo_no'] === 'FIM'
-                ? 'CONCLUIDA'
-                : 'EM_ANDAMENTO';
-
-            $atualizar = $this->pdo->prepare('
-                UPDATE progresso_area
-                SET id_no_atual = :id_no_destino,
-                    estado = :estado
-                WHERE id_perfil = :id_perfil
-                  AND id_area = :id_area
-                  AND id_no_atual = :id_no_atual
-            ');
-
-            $atualizar->execute([
-                'id_no_destino' => $idNoDestino,
-                'estado' => $novoEstado,
-                'id_perfil' => $idPerfil,
-                'id_area' => $idArea,
-                'id_no_atual' => $idNoAtual
-            ]);
-
-            if ($atualizar->rowCount() !== 1) {
-                throw new DomainException('O progresso mudou. Atualize o mapa e tente novamente.');
-            }
-
-            $this->pdo->commit();
-
-            return [
+            echo json_encode([
                 'sucesso' => true,
-                'mensagem' => 'Progresso salvo!',
-                'no' => [
-                    'id' => (int) $destino['id'],
-                    'titulo' => $destino['titulo'],
-                    'tipo_no' => $destino['tipo_no']
-                ]
-            ];
-
-        } catch (\Throwable $erro) {
-            if ($this->pdo->inTransaction()) {
-                $this->pdo->rollBack();
-            }
-
-            throw $erro;
+                'mensagem' => 'Time atualizado.'
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
         }
+
+        // Nao deixa andar pelo mapa sem ter escolhido o inicial.
+        if (!$inicial->perfilTemInicial($idPerfil)) {
+            throw new DomainException('Escolha seu Pokemon inicial antes de avancar no mapa.');
+        }
+
+        $idNoDestino = filter_var(
+            $_POST['id_no_destino'] ?? null,
+            FILTER_VALIDATE_INT
+        );
+
+        if ($idNoDestino === false || $idNoDestino === null) {
+            http_response_code(400);
+            echo json_encode([
+                'sucesso' => false,
+                'mensagem' => 'Ponto do mapa invalido.'
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        $resultado = $mapa->avancar(
+            $idPerfil,
+            $idUsuario,
+            (int) $idNoDestino
+        );
+
+        echo json_encode($resultado, JSON_UNESCAPED_UNICODE);
+        exit;
     }
 
-    private function garantirProgressoInicial(int $idPerfil, int $idArea): void
-    {
-        $consultaInicio = $this->pdo->prepare('
-            SELECT id
-            FROM area_no
-            WHERE id_area = :id_area
-              AND tipo_no = \'INICIO\'
-            ORDER BY id ASC
-            LIMIT 1
-        ');
+    $dados = $mapa->carregarMapa($idPerfil, $idUsuario);
+    $slotsTime = $time->listar($idPerfil);
 
-        $consultaInicio->execute(['id_area' => $idArea]);
-        $idNoInicio = $consultaInicio->fetchColumn();
+    // Perfil sem Pokemon ainda: o pop-up de escolha aparece em cima do mapa.
+    if (!$inicial->perfilTemInicial($idPerfil)) {
+        $iniciais = $inicial->listar();
+        $mostrarInicial = count($iniciais) > 0;
+    }
 
-        if ($idNoInicio === false) {
-            throw new DomainException('A area cadastrada ainda nao possui um no INICIO.');
+} catch (DomainException $erro) {
+    if ($ehPost) {
+        http_response_code(400);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode([
+            'sucesso' => false,
+            'mensagem' => $erro->getMessage()
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    $mensagemErro = $erro->getMessage();
+    $dados = null;
+} catch (Throwable $erro) {
+    error_log((string) $erro);
+
+    if ($ehPost) {
+        http_response_code(500);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode([
+            'sucesso' => false,
+            'mensagem' => 'Ocorreu um erro ao salvar o caminho.'
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    $mensagemErro = 'Nao foi possivel carregar o mapa. Verifique a conexao com o banco.';
+    $dados = null;
+}
+
+$iconePorTipo = static function (string $tipo): string {
+    return match ($tipo) {
+        'INICIO' => '🧑🏻',
+        'BATALHA' => '🌿',
+        'CAPTURA' => '🔴',
+        'ITEM' => '🎁',
+        'LOJA' => '🛒',
+        'CURA' => '🏥',
+        'EVENTO' => '📡',
+        'CHEFE' => '⭐',
+        'FIM' => '🏁',
+        default => '❔'
+    };
+};
+
+$idsProximos = [];
+$idNoAtual = null;
+$tipoNoAtual = null;
+
+if ($dados !== null && $dados['progresso'] !== null) {
+    $idNoAtual = $dados['progresso']['id_no_atual'] === null
+        ? null
+        : (int) $dados['progresso']['id_no_atual'];
+
+    $tipoNoAtual = $dados['progresso']['no_atual_tipo'];
+
+    // O jogador nao pode pular uma batalha: as proximas rotas ficam bloqueadas
+    // ate que o sistema de batalha registre uma vitoria para aquele no.
+    if (!in_array($tipoNoAtual, ['BATALHA', 'CHEFE'], true) || $dados['batalha_vencida']) {
+        foreach ($dados['conexoes'] as $conexao) {
+            if ((int) $conexao['id_no_origem'] === $idNoAtual) {
+                $idsProximos[] = (int) $conexao['id_no_destino'];
+            }
         }
-
-        $inserir = $this->pdo->prepare('
-            INSERT INTO progresso_area
-                (id_perfil, id_area, id_no_atual, estado, data_inicio)
-            VALUES
-                (:id_perfil, :id_area, :id_no_inicio, \'DISPONIVEL\', CURRENT_TIMESTAMP)
-            ON DUPLICATE KEY UPDATE
-                id_no_atual = IF(
-                    estado IN (\'BLOQUEADA\', \'DISPONIVEL\') AND id_no_atual IS NULL,
-                    VALUES(id_no_atual),
-                    id_no_atual
-                ),
-                estado = IF(estado = \'BLOQUEADA\', \'DISPONIVEL\', estado)
-        ');
-
-        $inserir->execute([
-            'id_perfil' => $idPerfil,
-            'id_area' => $idArea,
-            'id_no_inicio' => (int) $idNoInicio
-        ]);
     }
 }
+
+$escapar = static function ($valor): string {
+    return htmlspecialchars((string) $valor, ENT_QUOTES, 'UTF-8');
+};
+
+// Cor do brilho de cada card, conforme o tipo (R, G, B).
+$corPorTipo = static function (string $tipo): string {
+    return match ($tipo) {
+        'GRAMA' => '130, 200, 120',
+        'FOGO' => '255, 100, 40',
+        'AGUA' => '100, 170, 255',
+        default => '255, 255, 255'
+    };
+};
+?>
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Peakmon - Mapa</title>
+
+    <style>
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            overflow-x: hidden;
+            font-family: monospace;
+            color: #20252a;
+            background: linear-gradient(
+                to bottom,
+                #75c8f4 0%,
+                #8bd7f7 45%,
+                #e5f4f5 46%,
+                #9acb70 47%,
+                #7eaa6b 100%
+            );
+        }
+
+        .topo {
+            width: min(100% - 28px, 900px);
+            margin: 18px auto 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .informacao, .botao-menu {
+            background: #eee9dc;
+            border: 3px solid #292e31;
+            box-shadow: 3px 3px #42484b;
+            padding: 10px 14px;
+        }
+
+        .informacao strong { color: #385b43; }
+        .botao-menu { color: #20252a; text-decoration: none; font-weight: bold; }
+        .botao-menu:hover { background: #d9efd5; }
+
+        h1 {
+            text-align: center;
+            margin: 12px 8px 18px;
+            font-size: clamp(18px, 3vw, 25px);
+            text-shadow: 1px 2px #fff;
+        }
+
+        .mapa {
+            position: relative;
+            width: min(94vw, 620px);
+            height: min(150vw, 900px);
+            min-height: 620px;
+            margin: 0 auto 35px;
+            overflow: hidden;
+            border: 4px solid #24292a;
+            box-shadow: 5px 5px #40494b;
+            background-color: #72cda8;
+            background-image:
+                radial-gradient(circle at 20% 25%, #9adcb6 0 1px, transparent 2px),
+                radial-gradient(circle at 72% 63%, #4dbd91 0 1px, transparent 2px),
+                radial-gradient(circle at 50% 40%, #a1e0b9 0 1px, transparent 2px);
+            background-size: 19px 21px, 23px 17px, 29px 25px;
+        }
+
+        .mapa::before, .mapa::after {
+            content: "";
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 18px;
+            z-index: 1;
+            background: repeating-linear-gradient(
+                135deg,
+                #3c8d4e 0 7px,
+                #65bd68 7px 14px,
+                #b0e77a 14px 20px
+            );
+        }
+        .mapa::before { left: 0; }
+        .mapa::after { right: 0; }
+
+        .caminhos {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        .caminhos line {
+            stroke: #d6c9a1;
+            stroke-width: 0.8;
+            stroke-dasharray: 1.5 1.2;
+        }
+
+        .no {
+            position: absolute;
+            z-index: 3;
+            width: 46px;
+            height: 46px;
+            padding: 0;
+            transform: translate(-50%, -50%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border: 0;
+            background: transparent;
+            color: #20252a;
+            font: inherit;
+            font-size: 27px;
+            cursor: default;
+            filter: drop-shadow(1px 2px 0 rgba(0,0,0,.25));
+        }
+
+        button.no { cursor: pointer; }
+        button.no:hover { transform: translate(-50%, -50%) scale(1.2); }
+        button.no:focus-visible { outline: 3px solid white; border-radius: 50%; }
+
+        .no.atual {
+            width: 48px;
+            height: 48px;
+            border: 3px solid #252a2d;
+            border-radius: 50%;
+            background: #f3d86c;
+        }
+
+        .no.bloqueado {
+            opacity: .38;
+            filter: grayscale(1);
+        }
+
+        .no .dica {
+            position: absolute;
+            left: 50%;
+            bottom: calc(100% + 7px);
+            transform: translateX(-50%);
+            width: max-content;
+            max-width: 190px;
+            padding: 7px 9px;
+            border: 2px solid #252a2d;
+            background: #f2eddf;
+            color: #34332e;
+            box-shadow: 3px 3px #42484b;
+            font-size: 11px;
+            font-weight: bold;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+
+        .no:hover .dica, .no:focus-visible .dica {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .painel-inferior {
+            width: min(94vw, 620px);
+            margin: -15px auto 30px;
+            padding: 12px 15px;
+            border: 3px solid #292e31;
+            background: #eee9dc;
+            box-shadow: 4px 4px #42484b;
+            line-height: 1.6;
+        }
+
+        .erro {
+            width: min(94vw, 620px);
+            margin: 20px auto;
+            padding: 14px;
+            background: #fff0e8;
+            border: 3px solid #a84d38;
+            color: #7d281b;
+            line-height: 1.5;
+        }
+
+        .sem-area {
+            width: min(94vw, 620px);
+            margin: 30px auto;
+            padding: 22px;
+            border: 3px solid #292e31;
+            background: #eee9dc;
+            box-shadow: 4px 4px #42484b;
+            text-align: center;
+            line-height: 1.6;
+        }
+
+        .legenda {
+            width: min(94vw, 620px);
+            margin: 0 auto 25px;
+            padding: 10px 14px;
+            background: #eee9dc;
+            border: 2px solid #34383a;
+            font-size: 12px;
+            line-height: 1.8;
+        }
+
+        @media (max-width: 520px) {
+            .topo { align-items: stretch; }
+            .informacao { flex: 1; }
+            .mapa { min-height: 620px; }
+        }
+
+        /* ===== PAINEL: TIME (ao lado do mapa) ===== */
+
+        .area-jogo {
+            width: min(100% - 28px, 960px);
+            margin: 0 auto;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            gap: 24px;
+            flex-wrap: wrap;
+        }
+
+        .area-jogo .mapa {
+            margin: 0 0 35px;
+            flex: 0 0 auto;
+        }
+
+        .time {
+            width: 270px;
+            max-width: 94vw;
+            padding: 12px;
+            background: #eee9dc;
+            border: 3px solid #292e31;
+            box-shadow: 4px 4px #42484b;
+        }
+
+        .time-titulo {
+            margin: 0 0 10px;
+            text-align: center;
+            font-size: 18px;
+            letter-spacing: 4px;
+        }
+
+        .time-lista {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .time-slot {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .time-numero {
+            width: 18px;
+            flex: none;
+            text-align: center;
+            font-weight: bold;
+            color: #385b43;
+        }
+
+        .time-card {
+            flex: 1;
+            min-width: 0;
+            min-height: 54px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 5px 8px;
+            background: #f8f4e8;
+            border: 2px solid #34383a;
+            cursor: pointer;
+        }
+
+        .time-card:hover,
+        .time-card:focus-visible {
+            background: #e1f0dc;
+            outline: none;
+        }
+
+        .time-slot.vazio .time-card {
+            justify-content: center;
+            opacity: .6;
+        }
+
+        .time-slot.selecionado .time-card {
+            background: #f3d86c;
+            border-color: #20252a;
+            box-shadow: 0 0 0 3px #fff;
+            opacity: 1;
+        }
+
+        .time-foto {
+            width: 38px;
+            height: 38px;
+            flex: none;
+            border: 2px solid #34383a;
+            border-radius: 50%;
+            background-color: rgba(var(--cor), .45);
+            background-image: var(--img);
+            background-size: contain;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+
+        .time-dados {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            font-size: 12px;
+            line-height: 1.35;
+        }
+
+        .time-dados strong { font-size: 14px; }
+        .time-dados em { color: #a84d38; font-style: normal; font-weight: bold; }
+        .time-vazio { font-size: 12px; }
+
+        .time-trocar {
+            width: 32px;
+            height: 32px;
+            flex: none;
+            padding: 0;
+            border: 2px solid #292e31;
+            background: #d9efd5;
+            color: #20252a;
+            font: inherit;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        .time-trocar:hover { background: #b9e2b3; }
+
+        .time-aviso {
+            margin: 10px 0 0;
+            min-height: 2.8em;
+            font-size: 12px;
+            line-height: 1.4;
+            text-align: center;
+        }
+
+        .time-aviso.com-erro { color: #a8281b; }
+
+        /* ===== POP-UP: ESCOLHA DO POKEMON INICIAL ===== */
+
+        body.inicial-aberto { overflow: hidden; }
+
+        .inicial-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            display: flex;
+            padding: 20px;
+            overflow-y: auto;
+            background: rgba(5, 5, 5, 0.82);
+            backdrop-filter: blur(3px);
+            animation: inicial-aparecer 0.35s ease;
+        }
+
+        @keyframes inicial-aparecer {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .inicial-modal {
+            width: 100%;
+            max-width: 900px;
+            margin: auto;
+            text-align: center;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+
+        .inicial-modal h2 {
+            margin: 0 0 12px;
+            font-size: 28px;
+            letter-spacing: 5px;
+            text-transform: uppercase;
+        }
+
+        .inicial-subtitulo {
+            margin: 0 0 40px;
+            font-size: 12px;
+            letter-spacing: 3px;
+            color: #888;
+        }
+
+        .inicial-lista {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 35px;
+            padding: 15px 0;
+        }
+
+        /* CARD */
+
+        .inicial-card {
+            --cor: 255, 255, 255;
+
+            width: 230px;
+            height: 340px;
+            padding: 0;
+
+            position: relative;
+            overflow: hidden;
+
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+
+            background: radial-gradient(circle at 50% 35%, rgba(var(--cor), 0.35), #111 70%);
+            border: 1px solid #333;
+            color: white;
+            font-family: Arial, sans-serif;
+            cursor: pointer;
+
+            transition:
+                transform 0.35s ease,
+                box-shadow 0.35s ease,
+                border-color 0.35s ease;
+        }
+
+        .inicial-card::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+
+            background-image: var(--img);
+            background-size: contain;
+            background-position: center 40%;
+            background-repeat: no-repeat;
+
+            opacity: 0.25;
+            filter: grayscale(100%);
+
+            transition:
+                opacity 0.45s ease,
+                filter 0.45s ease,
+                transform 0.6s ease;
+        }
+
+        .inicial-card::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(
+                to top,
+                rgba(0, 0, 0, 0.95),
+                rgba(0, 0, 0, 0.15) 65%,
+                rgba(0, 0, 0, 0.1)
+            );
+            pointer-events: none;
+        }
+
+        .inicial-card:hover,
+        .inicial-card:focus-visible {
+            transform: scale(1.08);
+            border-color: rgba(255, 255, 255, 0.85);
+            box-shadow:
+                0 0 10px rgba(var(--cor), 0.45),
+                0 0 25px rgba(var(--cor), 0.2);
+            outline: none;
+        }
+
+        .inicial-card:hover::before,
+        .inicial-card:focus-visible::before {
+            opacity: 1;
+            filter: grayscale(0%);
+            transform: scale(1.08);
+        }
+
+        .inicial-card.selecionado {
+            transform: scale(1.05);
+            border-color: white;
+            box-shadow:
+                0 0 12px rgba(var(--cor), 0.7),
+                0 0 30px rgba(var(--cor), 0.35);
+        }
+
+        .inicial-card.selecionado::before {
+            opacity: 1;
+            filter: grayscale(0%);
+        }
+
+        .inicial-info {
+            position: relative;
+            z-index: 2;
+            width: 100%;
+            padding: 25px 10px;
+        }
+
+        .inicial-info h3 {
+            margin: 0;
+            font-size: 19px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .inicial-info p {
+            margin: 8px 0 0;
+            font-size: 10px;
+            letter-spacing: 2px;
+            color: #aaa;
+            text-transform: uppercase;
+        }
+
+        .inicial-info .inicial-status { color: #ddd; }
+
+        /* RODAPE: TEXTO + CONFIRMAR */
+
+        .inicial-selecao {
+            margin-top: 40px;
+            font-size: 13px;
+            letter-spacing: 3px;
+            color: #888;
+        }
+
+        .inicial-descricao {
+            max-width: 520px;
+            min-height: 3.2em;
+            margin: 12px auto 0;
+            font-size: 13px;
+            line-height: 1.6;
+            color: #aaa;
+        }
+
+        .inicial-erro {
+            min-height: 1.4em;
+            margin: 8px 0 0;
+            font-size: 13px;
+            color: #ff8585;
+        }
+
+        .inicial-confirmar {
+            margin-top: 14px;
+            padding: 14px 44px;
+            background: transparent;
+            color: white;
+            border: 1px solid white;
+            font-family: Arial, sans-serif;
+            font-size: 13px;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: background 0.3s ease, color 0.3s ease, opacity 0.3s ease;
+        }
+
+        .inicial-confirmar:hover:not(:disabled) {
+            background: white;
+            color: #050505;
+        }
+
+        .inicial-confirmar:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        @media (max-width: 650px) {
+            .inicial-lista { gap: 25px; }
+            .inicial-card { width: 200px; height: 290px; }
+            .inicial-modal h2 { font-size: 22px; letter-spacing: 3px; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .inicial-overlay { animation: none; }
+            .inicial-card, .inicial-card::before { transition: none; }
+        }
+    </style>
+</head>
+<body>
+
+<header class="topo">
+    <div class="informacao">
+        Perfil: <strong><?= $dados !== null ? $escapar($dados['perfil']['nome_perfil']) : $escapar($_SESSION['perfil_nome'] ?? 'Perfil') ?></strong>
+        <span> | Pokédollars: <strong><?= $dados !== null ? (int) $dados['perfil']['dinheiro'] : 0 ?></strong></span>
+    </div>
+    <a class="botao-menu" href="perfis.php">⇦ Trocar perfil</a>
+</header>
+
+<h1>
+    <?= $dados !== null && $dados['area'] !== null
+        ? $escapar($dados['area']['nome'])
+        : 'PEAKMON: THE BIGOLIN CRISIS' ?>
+</h1>
+
+<?php if (isset($mensagemErro)): ?>
+    <div class="erro"><?= $escapar($mensagemErro) ?></div>
+<?php elseif ($dados === null): ?>
+    <div class="erro">Nao foi possivel carregar os dados do mapa.</div>
+<?php elseif ($dados['area'] === null): ?>
+    <div class="sem-area">
+        <h2>O mapa ainda nao foi cadastrado!</h2>
+        <p>O perfil e o save estao funcionando, mas ainda precisamos cadastrar a area, os pontos e os caminhos no banco de dados.</p>
+    </div>
+<?php elseif (count($dados['nos']) === 0): ?>
+    <div class="sem-area">
+        <h2>Esta area ainda nao possui pontos.</h2>
+        <p>Cadastre os nos da area na tabela <strong>area_no</strong>.</p>
+    </div>
+<?php else: ?>
+
+    <main>
+        <div class="area-jogo">
+        <section class="mapa" aria-label="Mapa da area">
+            <svg class="caminhos" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                <?php foreach ($dados['conexoes'] as $conexao): ?>
+                    <line
+                        x1="<?= max(3, min(97, (int) $conexao['origem_x'])) ?>"
+                        y1="<?= max(3, min(97, (int) $conexao['origem_y'])) ?>"
+                        x2="<?= max(3, min(97, (int) $conexao['destino_x'])) ?>"
+                        y2="<?= max(3, min(97, (int) $conexao['destino_y'])) ?>"
+                    />
+                <?php endforeach; ?>
+            </svg>
+
+            <?php foreach ($dados['nos'] as $no): ?>
+                <?php
+                    $idNo = (int) $no['id'];
+                    $atual = $idNoAtual === $idNo;
+                    $proximo = in_array($idNo, $idsProximos, true);
+                    $x = max(3, min(97, (int) $no['pos_x']));
+                    $y = max(3, min(97, (int) $no['pos_y']));
+                    $icone = $iconePorTipo($no['tipo_no']);
+                    $tituloNo = $no['titulo'];
+                    $descricaoNo = $no['descricao'] ?? '';
+                ?>
+
+                <?php if ($proximo): ?>
+                    <button
+                        type="button"
+                        class="no"
+                        style="left: <?= $x ?>%; top: <?= $y ?>%;"
+                        data-id-no-destino="<?= $idNo ?>"
+                        aria-label="Avancar para <?= $escapar($tituloNo) ?>"
+                    >
+                        <?= $icone ?>
+                        <span class="dica"><?= $escapar($tituloNo) ?><?= $descricaoNo !== '' ? ' — ' . $escapar($descricaoNo) : '' ?></span>
+                    </button>
+                <?php else: ?>
+                    <div
+                        class="no <?= $atual ? 'atual' : 'bloqueado' ?>"
+                        style="left: <?= $x ?>%; top: <?= $y ?>%;"
+                        aria-label="<?= $escapar($tituloNo) ?>"
+                    >
+                        <?= $icone ?>
+                        <span class="dica"><?= $escapar($tituloNo) ?><?= $atual ? ' — Ponto atual' : '' ?></span>
+                    </div>
+                <?php endif; ?>
+            <?php endforeach; ?>
+        </section>
+
+        <aside class="time" aria-label="Time">
+            <h2 class="time-titulo">TIME</h2>
+
+            <ol class="time-lista" id="time-lista">
+                <?php foreach ($slotsTime as $posicao => $slot): ?>
+                    <li class="time-slot<?= $slot === null ? ' vazio' : '' ?>" data-posicao="<?= (int) $posicao ?>">
+                        <span class="time-numero"><?= (int) $posicao ?></span>
+
+                        <div class="time-card" role="button" tabindex="0" aria-label="Posição <?= (int) $posicao ?> do time">
+                            <?php if ($slot !== null): ?>
+                                <div class="time-foto" style="--cor: <?= $corPorTipo((string) $slot['tipo']) ?>; --img: url('<?= $escapar($slot['imagem']) ?>');"></div>
+                                <div class="time-dados">
+                                    <strong><?= $escapar($slot['nome']) ?></strong>
+                                    <span><?= $escapar($slot['tipo']) ?> • HP <?= (int) $slot['hp_atual'] ?>/<?= (int) $slot['hp_max'] ?></span>
+                                    <?php if ((int) $slot['desmaiado'] === 1): ?><em>DESMAIADO</em><?php endif; ?>
+                                </div>
+                            <?php else: ?>
+                                <span class="time-vazio">— vazio —</span>
+                            <?php endif; ?>
+                        </div>
+
+                        <button type="button" class="time-trocar" aria-label="Mover posição <?= (int) $posicao ?>" title="Trocar de posição">⇄</button>
+                    </li>
+                <?php endforeach; ?>
+            </ol>
+
+            <p class="time-aviso" id="time-aviso">Clique em um Pokémon e depois na posição para onde quer levá-lo.</p>
+        </aside>
+        </div>
+
+        <section class="painel-inferior">
+            <?php if (($tipoNoAtual === 'BATALHA' || $tipoNoAtual === 'CHEFE') && !$dados['batalha_vencida']): ?>
+                <strong>Você chegou a um ponto de batalha!</strong><br>
+                O caminho seguinte será liberado depois da vitória. A página de batalha será conectada na próxima etapa.
+            <?php elseif (($tipoNoAtual === 'BATALHA' || $tipoNoAtual === 'CHEFE') && $dados['batalha_vencida']): ?>
+                <strong>Batalha vencida!</strong><br>
+                Agora você pode escolher um dos próximos caminhos.
+            <?php elseif ($dados['progresso']['estado'] === 'CONCLUIDA'): ?>
+                <strong>Área concluída!</strong><br>
+                Você chegou ao final deste mapa.
+            <?php else: ?>
+                <strong>Ponto atual:</strong>
+                <?= $escapar($dados['progresso']['no_atual_titulo'] ?? 'Inicio') ?><br>
+                Clique em um dos pontos destacados para escolher seu próximo caminho.
+            <?php endif; ?>
+        </section>
+
+        <section class="legenda">
+            🌿 Batalha &nbsp; 🔴 Captura &nbsp; 🎁 Item &nbsp; 🛒 Loja<br>
+            🏥 Cura &nbsp; 📡 Evento &nbsp; ⭐ Chefe &nbsp; 🏁 Final
+        </section>
+    </main>
+
+<?php endif; ?>
+
+<?php if ($mostrarInicial): ?>
+    <div class="inicial-overlay" id="inicial-overlay" role="dialog" aria-modal="true" aria-labelledby="inicial-titulo">
+        <div class="inicial-modal">
+
+            <h2 id="inicial-titulo">Escolha seu inicial</h2>
+            <p class="inicial-subtitulo">ESTE SERÁ SEU PRIMEIRO PARCEIRO NA JORNADA</p>
+
+            <div class="inicial-lista">
+                <?php foreach ($iniciais as $pokemon): ?>
+                    <button
+                        type="button"
+                        class="inicial-card"
+                        style="--cor: <?= $corPorTipo((string) $pokemon['tipo']) ?>; --img: url('<?= $escapar($pokemon['imagem']) ?>');"
+                        data-id-pokemon="<?= (int) $pokemon['id'] ?>"
+                        data-nome="<?= $escapar($pokemon['nome']) ?>"
+                        data-descricao="<?= $escapar($pokemon['descricao']) ?>"
+                        aria-pressed="false"
+                    >
+                        <div class="inicial-info">
+                            <h3><?= $escapar($pokemon['nome']) ?></h3>
+                            <p><?= $escapar($pokemon['tipo']) ?> • <?= $escapar($pokemon['nome_ataque']) ?></p>
+                            <p class="inicial-status">
+                                HP <?= (int) $pokemon['hp'] ?> &nbsp;
+                                ATK <?= (int) $pokemon['atk'] ?> &nbsp;
+                                VEL <?= (int) $pokemon['vel'] ?>
+                            </p>
+                        </div>
+                    </button>
+                <?php endforeach; ?>
+            </div>
+
+            <div class="inicial-selecao" id="inicial-selecao">NENHUM POKÉMON SELECIONADO</div>
+            <p class="inicial-descricao" id="inicial-descricao"></p>
+            <p class="inicial-erro" id="inicial-erro" role="alert"></p>
+
+            <button type="button" class="inicial-confirmar" id="inicial-confirmar" disabled>Confirmar</button>
+
+        </div>
+    </div>
+<?php endif; ?>
+
+<script>
+    // Cada clique envia apenas o ID do proximo no. O perfil ativo fica na sessao PHP.
+    document.querySelectorAll('[data-id-no-destino]').forEach((botao) => {
+        botao.addEventListener('click', async () => {
+            botao.disabled = true;
+
+            const dados = new URLSearchParams();
+            dados.set('id_no_destino', botao.dataset.idNoDestino);
+
+            try {
+                const resposta = await fetch('mapa.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: dados.toString()
+                });
+
+                const resultado = await resposta.json();
+
+                if (!resposta.ok || !resultado.sucesso) {
+                    throw new Error(resultado.mensagem || 'Nao foi possivel salvar o caminho.');
+                }
+
+                window.location.reload();
+
+            } catch (erro) {
+                alert(erro.message);
+                botao.disabled = false;
+            }
+        });
+    });
+
+    // ===== Pop-up de escolha do Pokemon inicial =====
+    (function () {
+        const overlay = document.getElementById('inicial-overlay');
+        if (!overlay) return;
+
+        document.body.classList.add('inicial-aberto');
+
+        const cards = overlay.querySelectorAll('.inicial-card');
+        const textoSelecao = document.getElementById('inicial-selecao');
+        const textoDescricao = document.getElementById('inicial-descricao');
+        const textoErro = document.getElementById('inicial-erro');
+        const botaoConfirmar = document.getElementById('inicial-confirmar');
+        let idEscolhido = null;
+
+        cards.forEach((card) => {
+            card.addEventListener('click', () => {
+                cards.forEach((outro) => {
+                    outro.classList.remove('selecionado');
+                    outro.setAttribute('aria-pressed', 'false');
+                });
+
+                card.classList.add('selecionado');
+                card.setAttribute('aria-pressed', 'true');
+
+                idEscolhido = card.dataset.idPokemon;
+                textoSelecao.textContent = 'SELECIONADO: ' + card.dataset.nome.toUpperCase();
+                textoDescricao.textContent = card.dataset.descricao;
+                textoErro.textContent = '';
+                botaoConfirmar.disabled = false;
+            });
+        });
+
+        botaoConfirmar.addEventListener('click', async () => {
+            if (idEscolhido === null) return;
+
+            botaoConfirmar.disabled = true;
+            textoErro.textContent = '';
+
+            const dados = new URLSearchParams();
+            dados.set('acao', 'escolher_inicial');
+            dados.set('id_pokemon', idEscolhido);
+
+            try {
+                const resposta = await fetch('mapa.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: dados.toString()
+                });
+
+                const resultado = await resposta.json();
+
+                if (!resposta.ok || !resultado.sucesso) {
+                    throw new Error(resultado.mensagem || 'Nao foi possivel salvar a escolha.');
+                }
+
+                window.location.reload();
+
+            } catch (erro) {
+                textoErro.textContent = erro.message;
+                botaoConfirmar.disabled = false;
+            }
+        });
+
+        // Foco no primeiro card para dar para escolher so com o teclado.
+        if (cards.length > 0) cards[0].focus();
+    })();
+
+    // ===== Painel TIME: trocar Pokemon de posicao =====
+    (function () {
+        const lista = document.getElementById('time-lista');
+        if (!lista) return;
+
+        const aviso = document.getElementById('time-aviso');
+        const textoPadrao = aviso.textContent;
+        let origem = null;      // posicao (li) escolhida primeiro
+        let ocupado = false;    // evita cliques enquanto o servidor responde
+
+        function mostrar(texto, erro) {
+            aviso.textContent = texto;
+            aviso.classList.toggle('com-erro', Boolean(erro));
+        }
+
+        function limpar() {
+            if (origem) origem.classList.remove('selecionado');
+            origem = null;
+        }
+
+        async function clicou(slot) {
+            if (ocupado) return;
+
+            // 1o clique: escolhe o Pokemon que vai mudar de lugar.
+            if (origem === null) {
+                if (slot.classList.contains('vazio')) {
+                    mostrar('Escolha primeiro um Pokémon.', true);
+                    return;
+                }
+                origem = slot;
+                slot.classList.add('selecionado');
+                mostrar('Agora clique na posição de destino.', false);
+                return;
+            }
+
+            // Clicou na mesma posicao de novo: cancela.
+            if (origem === slot) {
+                limpar();
+                mostrar(textoPadrao, false);
+                return;
+            }
+
+            // 2o clique: pede ao servidor para trocar (ou mover para posicao vazia).
+            const de = origem;
+            ocupado = true;
+
+            const dados = new URLSearchParams();
+            dados.set('acao', 'mover_time');
+            dados.set('de', de.dataset.posicao);
+            dados.set('para', slot.dataset.posicao);
+
+            try {
+                const resposta = await fetch('mapa.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: dados.toString()
+                });
+
+                const resultado = await resposta.json();
+
+                if (!resposta.ok || !resultado.sucesso) {
+                    throw new Error(resultado.mensagem || 'Nao foi possivel mover o Pokemon.');
+                }
+
+                // Troca o conteudo das duas posicoes na tela.
+                const cartaoDe = de.querySelector('.time-card');
+                const cartaoPara = slot.querySelector('.time-card');
+                const htmlDe = cartaoDe.innerHTML;
+                cartaoDe.innerHTML = cartaoPara.innerHTML;
+                cartaoPara.innerHTML = htmlDe;
+
+                const deVazio = de.classList.contains('vazio');
+                const paraVazio = slot.classList.contains('vazio');
+                de.classList.toggle('vazio', paraVazio);
+                slot.classList.toggle('vazio', deVazio);
+
+                limpar();
+                mostrar('Time atualizado!', false);
+
+            } catch (erro) {
+                limpar();
+                mostrar(erro.message, true);
+            } finally {
+                ocupado = false;
+            }
+        }
+
+        lista.querySelectorAll('.time-slot').forEach((slot) => {
+            const cartao = slot.querySelector('.time-card');
+            const botao = slot.querySelector('.time-trocar');
+
+            cartao.addEventListener('click', () => clicou(slot));
+            cartao.addEventListener('keydown', (evento) => {
+                if (evento.key === 'Enter' || evento.key === ' ') {
+                    evento.preventDefault();
+                    clicou(slot);
+                }
+            });
+            botao.addEventListener('click', () => clicou(slot));
+        });
+    })();
+</script>
+
+</body>
+</html>
