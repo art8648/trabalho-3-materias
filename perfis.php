@@ -137,6 +137,10 @@ try {
 <body>
 
     <h1>ESCOLHA SEU PERFIL</h1>
+    <p style="margin: -24px 0 24px;">
+        Jogador: <?= htmlspecialchars((string) ($_SESSION['usuario_nome'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
+        · <a href="logout.php" style="color: #8de0a5;">Sair da conta</a>
+    </p>
 
     <?php if ($erro !== ''): ?>
         <p class="erro">
