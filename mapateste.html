@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mapa Pokémon — Área Selvagem</title>
+<style>
+  * { box-sizing: border-box; }
+  :root { --ink:#20252a; --panel:#e9e5d8; --panel-shadow:#34383a; --grass:#72cda8; }
+  body {
+    margin:0; min-height:100vh; overflow-x:hidden; font-family:monospace;
+    color:var(--ink);
+    background:
+      linear-gradient(to bottom, #75c8f4 0%, #8bd7f7 57%, #e5f4f5 58%, #6f91ec 59%, #6f91ec 75%, #9acb70 75%, #7eaa6b 100%);
+  }
+  /* Nuvens e chão em estilo retrô */
+  .cloud { position:fixed; height:42px; width:180px; opacity:.9; pointer-events:none;
+    background:#fff; border-radius:30px; filter:drop-shadow(0 3px #dcecf8); }
+  .cloud:before,.cloud:after { content:""; position:absolute; background:#fff; border-radius:50%; }
+  .cloud:before { width:72px;height:72px;left:25px;bottom:0; }
+  .cloud:after { width:54px;height:54px;left:78px;bottom:0; }
+  .cloud.one { left:3%; top:47%; transform:scale(.8); }
+  .cloud.two { right:4%; top:44%; transform:scale(1.2); }
+  .cloud.three { right:25%; top:57%; transform:scale(.55); }
+  .ground { position:fixed; left:0; right:0; bottom:0; height:24%; z-index:-1;
+    background:repeating-linear-gradient(90deg,#a3d86b 0 12px,#8fc75e 12px 24px);
+    border-top:8px dotted #69994b; }
+  .menu { position:fixed; top:14px; left:14px; width:32px; height:32px; border:3px solid #24292d;
+    background:#eee9dc; box-shadow:3px 3px #41484b; font-size:20px; line-height:22px; text-align:center; }
+  .layout { width:min(100%, 760px); min-height:100vh; margin:0 auto; display:grid;
+    grid-template-columns:126px minmax(300px,500px) 150px; gap:16px; align-items:start; padding:18px 8px; }
+  .panel { background:var(--panel); border:3px solid #292e31; box-shadow:4px 4px #42484b; padding:12px 10px;
+    font-size:12px; color:#8a8372; min-height:155px; }
+  .panel h2 { font-size:14px; margin:0 0 10px; letter-spacing:1px; color:#817866; }
+  .pokemon { text-align:center; font-size:31px; margin:8px 0 4px; }
+  .name { text-align:center; font-weight:bold; margin:5px 0; }
+  .level { text-align:center; color:#d5a900; font-weight:bold; }
+  .hp { height:14px; background:#3f4b43; border:2px solid #20252a; padding:1px; }
+  .hp span { display:block; height:100%; width:100%; background:#42ed57; }
+  .badge-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:4px; margin-top:7px; }
+  .badge { width:27px;height:27px;border:1px dashed #b9b5a8;border-radius:50%; }
+  .map {
+    position:relative; height:min(94vh, 840px); min-height:620px; overflow:hidden;
+    border:4px solid #24292a; box-shadow:4px 4px #40494b;
+    background-color:var(--grass);
+    background-image:
+      radial-gradient(circle at 20% 25%, #9adcb6 0 1px, transparent 2px),
+      radial-gradient(circle at 72% 63%, #4dbd91 0 1px, transparent 2px),
+      radial-gradient(circle at 50% 40%, #a1e0b9 0 1px, transparent 2px),
+      linear-gradient(90deg, #4eaa63 0 6%, transparent 8% 92%, #4eaa63 94%);
+    background-size:19px 21px,23px 17px,29px 25px,100% 100%;
+  }
+  .map:before,.map:after { content:"";position:absolute;top:0;bottom:0;width:22px;
+    background:repeating-linear-gradient(135deg,#3c8d4e 0 7px,#65bd68 7px 14px,#b0e77a 14px 20px); }
+  .map:before {left:0}.map:after{right:0}
+  .entrance { position:absolute; top:0; left:39%; width:22%; height:10%; background:#e6d69b;
+    clip-path:polygon(35% 0,65% 0,100% 100%,0 100%); border-bottom:3px solid #c3b47f; }
+  .exit { position:absolute; bottom:0; left:39%; width:22%; height:8%; background:#e6d69b; }
+  .path-lines { position:absolute; inset:0; width:100%;height:100%; pointer-events:none; }
+  .path-lines line { stroke:#1c2927; stroke-width:1.3; stroke-dasharray:3 4; opacity:.9; }
+  .path-lines .main { stroke:#d6c9a1; stroke-width:2.4; stroke-dasharray:none; }
+  .node { position:absolute; z-index:2; width:34px;height:34px; transform:translate(-50%,-50%);
+    display:flex;align-items:center;justify-content:center; cursor:help; font-size:24px;
+    filter:drop-shadow(1px 2px 0 rgba(0,0,0,.25)); }
+  .node .tip { position:absolute; left:50%; bottom:calc(100% + 8px); transform:translateX(-50%) translateY(4px);
+    width:max-content; max-width:190px; padding:7px 9px; border:2px solid #252a2d;
+    background:#f2eddf; color:#34332e; box-shadow:3px 3px #42484b; font-size:12px; font-weight:bold;
+    opacity:0; visibility:hidden; transition:opacity .12s,transform .12s; pointer-events:none; z-index:10; }
+  .node .tip:after { content:"";position:absolute;top:100%;left:50%;border:6px solid transparent;border-top-color:#252a2d; }
+  .node:hover .tip,.node:focus .tip { opacity:1;visibility:visible;transform:translateX(-50%) translateY(0); }
+  .node:focus { outline:2px solid white; outline-offset:2px; }
+  .pokeball { font-size:25px; }
+  .grass-node { font-size:27px; }
+  .trainer { font-size:27px; }
+  .wild { font-size:25px; }
+  .boss { width:44px;height:44px;font-size:33px; background:#f3d86c; border:3px solid #2c3031; border-radius:50%; }
+  .start { font-size:28px; }
+  .legend { position:fixed; bottom:12px; left:14px; background:#eee9dc; border:2px solid #34383a; padding:8px 10px;
+    font-size:11px; line-height:1.7; box-shadow:3px 3px #42484b; }
+  .legend span { margin-right:5px; }
+  @media (max-width:700px) {
+    .layout { grid-template-columns:1fr; width:min(100%,510px); gap:10px; padding:58px 10px 18px; }
+    .panel { min-height:auto; }
+    .team { display:none; }
+    .items { order:2; }
+    .map { order:1; height:75vh; min-height:590px; }
+    .legend { display:none; }
+    .cloud.two { right:-40px; }
+  }
+  .centro-pokemon {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.centro-pokemon img {
+    width: 85px;
+    height: auto;
+    object-fit: contain;
+    image-rendering: pixelated;
+}
+
+.node:focus {
+    outline: none;
+}
+
+.node:focus-visible {
+    outline: none;
+}
+.yama {
+    width: 40px;
+    height: 30px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+.yama .tip {
+    bottom: auto;
+    top: calc(100% - 8px);
+}
+.yama img {
+    width: 70px;
+    height: auto;
+    object-fit: contain;
+    image-rendering: pixelated;
+}
+.menu a {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    justify-content: center;
+    align-items: center;
+    color: #20252a;
+    text-decoration: none;
+}
+</style>
+</head>
+<body>
+<div class="cloud one"></div><div class="cloud two"></div><div class="cloud three"></div><div class="ground"></div>
+<div class="menu" aria-label="Menu">
+  <a href="perfis.html">≡</a>
+</div>
+<main class="layout">
+  <aside class="panel team">
+    <h2>TEAM</h2>
+    <div class="pokemon">🔥</div>
+    <div class="name">Charmander</div>
+    <div class="level">Lv. 5</div>
+    <div class="hp"><span></span></div>
+  </aside>
+
+  <section class="map" aria-label="Mapa da área Pokémon">
+    <div class="entrance"></div><div class="exit"></div>
+    <svg class="path-lines" viewBox="0 0 500 840" preserveAspectRatio="none" aria-hidden="true">
+      <line class="main" x1="250" y1="25" x2="135" y2="125"/>
+      <line class="main" x1="250" y1="25" x2="365" y2="125"/>
+      <line x1="135" y1="125" x2="85" y2="225"/><line x1="135" y1="125" x2="250" y2="225"/>
+      <line x1="365" y1="125" x2="250" y2="225"/><line x1="365" y1="125" x2="415" y2="225"/>
+      <line x1="85" y1="225" x2="65" y2="330"/><line x1="85" y1="225" x2="190" y2="330"/>
+      <line x1="250" y1="225" x2="190" y2="330"/><line x1="250" y1="225" x2="310" y2="330"/>
+      <line x1="415" y1="225" x2="310" y2="330"/><line x1="415" y1="225" x2="430" y2="330"/>
+      <line x1="65" y1="330" x2="85" y2="430"/><line x1="190" y1="330" x2="85" y2="430"/>
+      <line x1="190" y1="330" x2="250" y2="430"/><line x1="310" y1="330" x2="250" y2="430"/>
+      <line x1="310" y1="330" x2="410" y2="430"/><line x1="430" y1="330" x2="410" y2="430"/>
+      <line x1="85" y1="430" x2="190" y2="535"/><line x1="250" y1="430" x2="190" y2="535"/>
+      <line x1="250" y1="430" x2="320" y2="535"/><line x1="410" y1="430" x2="320" y2="535"/>
+      <line x1="190" y1="535" x2="95" y2="635"/><line x1="190" y1="535" x2="250" y2="635"/>
+      <line x1="320" y1="535" x2="250" y2="635"/><line x1="320" y1="535" x2="410" y2="635"/>
+      <line x1="95" y1="635" x2="150" y2="735"/><line x1="250" y1="635" x2="150" y2="735"/>
+      <line x1="250" y1="635" x2="350" y2="735"/><line x1="410" y1="635" x2="350" y2="735"/>
+      <line x1="150" y1="735" x2="250" y2="815"/><line x1="350" y1="735" x2="250" y2="815"/>
+    </svg>
+
+    <div class="node yama" style="left:50%; top:3.5%" tabindex="0" aria-label="Yama">
+    <img src="Ancião Monge Pixelado com Cajado.png" alt="Yama">
+    <span class="tip">Yama — Chefe da área</span>
+    </div>
+    <div class="node pokeball" style="left:27%;top:15%" tabindex="0" aria-label="Capturar Pokémon">🔴<span class="tip">Capturar Pokémon</span></div>
+    <div class="node grass-node" style="left:72%;top:15%" tabindex="0" aria-label="Batalha com Pokémon selvagem">🌿<span class="tip">Batalha com Pokémon selvagem</span></div>
+    <div class="node pokeball" style="left:19%;top:27%" tabindex="0">🔴<span class="tip">Capturar Pokémon</span></div>
+    <div class="node pokeball" style="left:50%;top:27%" tabindex="0">🔴<span class="tip">Capturar Pokémon</span></div>
+    <div class="node grass-node" style="left:82%;top:27%" tabindex="0">🌿<span class="tip">Batalha com Pokémon selvagem</span></div>
+    <div class="node pokeball" style="left:14%;top:39%" tabindex="0">🔴<span class="tip">Capturar Pokémon</span></div>
+    <div class="node" style="left:39%;top:39%" tabindex="0">📡<span class="tip">Capturar Pokémon</span></div>
+    <div class="node grass-node" style="left:63%;top:40%" tabindex="0">🌿<span class="tip">Batalha com Pokémon selvagem</span></div>
+    <div class="node wild" style="left:85%;top:40%" tabindex="0">👻<span class="tip">Batalha com Pokémon selvagem</span></div>
+    <div class="node" style="left:19%;top:51%" tabindex="0">🏳️<span class="tip">Capturar Pokémon</span></div>
+    <div class="node wild" style="left:50%;top:51%" tabindex="0">👻<span class="tip">Batalha com Pokémon selvagem</span></div>
+    <div class="node trainer" style="left:81%;top:51%" tabindex="0">🧢<span class="tip">Batalha contra treinador</span></div>
+    <div class="node grass-node" style="left:38%;top:63%" tabindex="0">🌿<span class="tip">Batalha com Pokémon selvagem</span></div>
+    <div class="node wild" style="left:63%;top:63%" tabindex="0">👻<span class="tip">Batalha com Pokémon selvagem</span></div>
+    <div class="node wild" style="left:19%;top:75%" tabindex="0">👻<span class="tip">Batalha com Pokémon selvagem</span></div>
+    <div class="node grass-node" style="left:50%;top:75%" tabindex="0">🌿<span class="tip">Batalha com Pokémon selvagem</span></div>
+    <div class="node pokeball" style="left:81%;top:75%" tabindex="0">🔴<span class="tip">Capturar Pokémon</span></div>
+    <div class="node wild" style="left:27%;top:87%" tabindex="0">👻<span class="tip">Batalha com Pokémon selvagem</span></div>
+    <div class="node centro-pokemon" style="left:68%;top:85%" tabindex="0">
+    <img src="Centro Pokémon em Pixel Art.png" alt="Centro Pokémon">
+    <span class="tip">Centro Pokémon</span>
+    </div>
+    <div class="node start" style="left:50%;top:98%" tabindex="0">🧑🏻<span class="tip">Início da área</span></div>
+  </section>
+</main>
+<div class="legend">
+  <div><span>🌿</span> Mato: batalha selvagem</div>
+  <div><span>🧢</span> Pessoa: batalha contra treinador</div>
+  <div><span>🔴</span> Pokébola: capturar Pokémon</div>
+  <div><span>★</span> Chefe da área</div>
+</div>
+<script src="perfis.js"></script>
+
+<script>
+    // Verifica se existe um perfil selecionado
+    if (!SistemaPerfis.perfilAtual()) {
+        window.location.href = "perfis.html";
+    }
+</script>
+</body>
+</html>

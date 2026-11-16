@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Registro e Login</title>
+    <title>Entrar ou criar conta — Peakmon</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400..700&display=swap">
@@ -11,31 +11,76 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="container" id="signup">
-        <h1 class="form-title">Registro</h1>
-        <form method="post" action="">
-          <div class="input-group">
-            <i class="fas fa-user"></i>
-            <input type="text" name="pNome" id="pNome" placeholder="Primeiro Nome" required>
-            <label for="pnome">Primeiro Nome</label>
-        </div>
-        <div class="input-group">
-            <i class="fas fa-user"></i>
-            <input type="text" name="uNome" id="uNome" placeholder="Último Nome" required>
-            <label for="uNome">Último nome</label>
-        </div>
-        <div class="input-group">
-            <i class="fas fa-envelope"></i>
-            <input type="email" name="email" id="email" placeholder="Email" required>
-            <label for="email">Email</label>
-        </div>
-        <div class="input-group">
-            <i class="fas fa-lock"></i>
-            <input type="password" id="password" placeholder="Senha" required>
-            <label for="password">Senha</label>
-        </div>
-        
-        </form>
-    </div>
+    <main>
+        <p style="text-align:center; margin: 18px 0;">
+            <a href="menu.html">Voltar ao menu inicial</a>
+        </p>
+        <section class="container" id="signup">
+            <h1 class="form-title">Cadastro</h1>
+
+            <!-- Cadastro -->
+<form action="/trabalho-3-materias-integracao-peakmon/auth.php" method="POST">
+                <input type="hidden" name="acao" value="registrar">
+
+                <div class="input-group">
+                    <label for="cadastro-nome">Nome de usuário</label>
+                    <input
+                        type="text"
+                        id="cadastro-nome"
+                        name="nome"
+                        maxlength="60"
+                        required
+                    >
+                </div>
+                
+                <div class="input-group">
+                    <label for="cadastro-senha">Senha</label>
+                    <input
+                        type="password"
+                        id="cadastro-senha"
+                        name="senha"
+                        minlength="8"
+                        required
+                    >
+                </div>
+
+                <button type="submit">Cadastrar</button>
+            </form>
+        </section>
+
+        <hr>
+
+        <section class="container" id="login">
+            <h1 class="form-title">Entrar</h1>
+
+            <!-- Login -->
+<form action="/trabalho-3-materias-integracao-peakmon/auth.php" method="POST">
+                <input type="hidden" name="acao" value="entrar">
+
+                <div class="input-group">
+                    <label for="login-nome">Nome de usuário</label>
+                    <input
+                        type="text"
+                        id="login-nome"
+                        name="nome"
+                        maxlength="60"
+                        required
+                    >
+                </div>
+
+                <div class="input-group">
+                    <label for="login-senha">Senha</label>
+                    <input
+                        type="password"
+                        id="login-senha"
+                        name="senha"
+                        required
+                    >
+                </div>
+
+                <button type="submit">Entrar</button>
+            </form>
+        </section>
+    </main>
 </body>
 </html>

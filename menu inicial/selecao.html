@@ -275,7 +275,10 @@
         <div class="selection" id="selection">
             NO CHARACTER SELECTED
         </div>
-
+        <form action="../selecionar_personagem.php" method="POST">
+            <input type="hidden" name="personagem" id="personagem" value="">
+            <button type="submit" id="confirmar" disabled>CONFIRMAR</button>
+        </form>
     </main>
 
     <script>
@@ -291,11 +294,11 @@
 
             document.getElementById('selection').textContent =
                 'SELECTED: ' + name.toUpperCase();
-
+            document.getElementById('personagem').value = name;
+            document.getElementById('confirmar').disabled = false;
         }
 
     </script>
 
 </body>
 </html>
-Exibindo selecao-personagens.html.
