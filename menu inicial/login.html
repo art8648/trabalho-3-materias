@@ -226,66 +226,87 @@
 </style>
 
 </head>
+
 <body>
     <main>
-        <div class="cadastro-layout">
 
-    <!-- Pokémon da esquerda -->
-    <img
-        src="images/deus.png"
-        alt="Pokémon da esquerda"
-        class="pokemon-lateral pokemon-esquerda"
-    >
-
-    <section class="container" id="signup">
-        <h1 class="form-title">Cadastro</h1>
         <p style="text-align:center; margin: 18px 0;">
             <a href="menu.html">Voltar ao menu inicial</a>
         </p>
-        <section class="container" id="signup">
-            <h1 class="form-title">Cadastro</h1>
 
-            <!-- Cadastro -->
-<form action="/trabalho-3-materias-integracao-peakmon/auth.php" method="POST">
-                <input type="hidden" name="acao" value="registrar">
+        <!-- Cadastro com os Pokémon nas laterais -->
+        <div class="cadastro-layout">
 
-                <div class="input-group">
-                    <label for="cadastro-nome">Nome de usuário</label>
-                    <input
-                        type="text"
-                        id="cadastro-nome"
-                        name="nome"
-                        maxlength="60"
-                        required
-                    >
-                </div>
-                
-                <div class="input-group">
-                    <label for="cadastro-senha">Senha</label>
-                    <input
-                        type="password"
-                        id="cadastro-senha"
-                        name="senha"
-                        minlength="8"
-                        required
-                    >
-                </div>
+            <img
+                src="images/deus.png"
+                alt="Pokémon da esquerda"
+                class="pokemon-lateral pokemon-esquerda"
+            >
 
-                <button type="submit">Cadastrar</button>
-            </form>
-        </section>
+            <section class="container" id="signup">
+
+                <h1 class="form-title">Cadastro</h1>
+
+                <form action="/trabalho-3-materias-integracao-peakmon/auth.php"
+                      method="POST">
+
+                    <input type="hidden" name="acao" value="registrar">
+
+                    <div class="input-group">
+                        <label for="cadastro-nome">
+                            Nome de usuário
+                        </label>
+
+                        <input
+                            type="text"
+                            id="cadastro-nome"
+                            name="nome"
+                            maxlength="60"
+                            required
+                        >
+                    </div>
+
+                    <div class="input-group">
+                        <label for="cadastro-senha">Senha</label>
+
+                        <input
+                            type="password"
+                            id="cadastro-senha"
+                            name="senha"
+                            minlength="8"
+                            required
+                        >
+                    </div>
+
+                    <button type="submit">Cadastrar</button>
+
+                </form>
+
+            </section>
+
+            <img
+                src="images/rayquaza.png"
+                alt="Rayquaza"
+                class="pokemon-lateral pokemon-direita"
+            >
+
+        </div>
 
         <hr>
 
+        <!-- Login separado do cadastro -->
         <section class="container" id="login">
+
             <h1 class="form-title">Entrar</h1>
 
-            <!-- Login -->
-<form action="/trabalho-3-materias-integracao-peakmon/auth.php" method="POST">
+            <form action="/trabalho-3-materias-integracao-peakmon/auth.php"
+                  method="POST">
+
                 <input type="hidden" name="acao" value="entrar">
 
                 <div class="input-group">
                     <label for="login-nome">Nome de usuário</label>
+
                     <input
                         type="text"
                         id="login-nome"
@@ -297,6 +318,7 @@
 
                 <div class="input-group">
                     <label for="login-senha">Senha</label>
+
                     <input
                         type="password"
                         id="login-senha"
@@ -306,18 +328,11 @@
                 </div>
 
                 <button type="submit">Entrar</button>
+
             </form>
-        </section>
+
         </section>
 
-    <!-- Rayquaza da direita -->
-    <img
-        src="images/rayquaza.png"
-        alt="Rayquaza"
-        class="pokemon-lateral pokemon-direita"
-    >
-
-        </div>
     </main>
 </body>
 </html>
