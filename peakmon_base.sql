@@ -1064,9 +1064,6 @@ END//
 
 DELIMITER ;
 
-INSERT INTO usuario (nome, senha_hash)
-VALUES ('jogador_local', '$2y$10$7fe2DraFCjUXWfaKoUh5Hef8F3a0hUhrUqcvUHyYuywHrH3BpMq5G');
-
 INSERT INTO tipo_pokemon (id, nome) VALUES
 (1,'NORMAL'), (2,'FOGO'), (3,'AGUA'), (4,'ELETRICO'),
 (5,'GRAMA'), (6,'GELO'), (7,'LUTADOR'), (8,'VENENO'),
