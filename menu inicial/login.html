@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Registro e Login</title>
+    <title>Entrar ou criar conta — Peakmon</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400..700&display=swap">
@@ -12,10 +12,14 @@
 </head>
 <body>
     <main>
+        <p style="text-align:center; margin: 18px 0;">
+            <a href="menu.html">Voltar ao menu inicial</a>
+        </p>
         <section class="container" id="signup">
             <h1 class="form-title">Cadastro</h1>
 
-            <form action="../auth.php" method="POST">
+            <!-- Cadastro -->
+<form action="/trabalho-3-materias-integracao-peakmon/auth.php" method="POST">
                 <input type="hidden" name="acao" value="registrar">
 
                 <div class="input-group">
@@ -49,7 +53,8 @@
         <section class="container" id="login">
             <h1 class="form-title">Entrar</h1>
 
-            <form action="../auth.php" method="POST">
+            <!-- Login -->
+<form action="/trabalho-3-materias-integracao-peakmon/auth.php" method="POST">
                 <input type="hidden" name="acao" value="entrar">
 
                 <div class="input-group">
