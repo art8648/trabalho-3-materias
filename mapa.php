@@ -1,7 +1,9 @@
 <?php
 declare(strict_types=1);
 
+use Peakmon\Models\Inicial;
 use Peakmon\Models\Mapa;
+use Peakmon\Models\Time;
 
 require_once __DIR__ . '/app/sessao.php';
 require_once __DIR__ . '/app/autoload.php';
@@ -27,13 +29,70 @@ if (!isset($_SESSION['usuario_id'], $_SESSION['perfil_id'])) {
 $idUsuario = (int) $_SESSION['usuario_id'];
 $idPerfil = (int) $_SESSION['perfil_id'];
 
+$mostrarInicial = false;
+$iniciais = [];
+$slotsTime = [];
+
 try {
     $pdo = require __DIR__ . '/config/database.php';
     $mapa = new Mapa($pdo);
+    $inicial = new Inicial($pdo);
+    $time = new Time($pdo);
 
     // O mesmo arquivo recebe o clique do mapa e salva o novo ponto.
     if ($ehPost) {
         header('Content-Type: application/json; charset=utf-8');
+
+        // Clique em CONFIRMAR no pop-up: salva o Pokemon inicial do perfil.
+        if (($_POST['acao'] ?? '') === 'escolher_inicial') {
+            $idPokemon = filter_var(
+                $_POST['id_pokemon'] ?? null,
+                FILTER_VALIDATE_INT
+            );
+
+            if ($idPokemon === false || $idPokemon === null) {
+                http_response_code(400);
+                echo json_encode([
+                    'sucesso' => false,
+                    'mensagem' => 'Pokemon invalido.'
+                ], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+
+            echo json_encode(
+                $inicial->escolher($idPerfil, $idUsuario, (int) $idPokemon),
+                JSON_UNESCAPED_UNICODE
+            );
+            exit;
+        }
+
+        // Painel TIME: troca dois Pokemon de posicao (ou move para uma posicao vazia).
+        if (($_POST['acao'] ?? '') === 'mover_time') {
+            $de = filter_var($_POST['de'] ?? null, FILTER_VALIDATE_INT);
+            $para = filter_var($_POST['para'] ?? null, FILTER_VALIDATE_INT);
+
+            if ($de === false || $de === null || $para === false || $para === null) {
+                http_response_code(400);
+                echo json_encode([
+                    'sucesso' => false,
+                    'mensagem' => 'Posicao invalida.'
+                ], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+
+            $time->mover($idPerfil, $idUsuario, (int) $de, (int) $para);
+
+            echo json_encode([
+                'sucesso' => true,
+                'mensagem' => 'Time atualizado.'
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        // Nao deixa andar pelo mapa sem ter escolhido o inicial.
+        if (!$inicial->perfilTemInicial($idPerfil)) {
+            throw new DomainException('Escolha seu Pokemon inicial antes de avancar no mapa.');
+        }
 
         $idNoDestino = filter_var(
             $_POST['id_no_destino'] ?? null,
@@ -60,6 +119,13 @@ try {
     }
 
     $dados = $mapa->carregarMapa($idPerfil, $idUsuario);
+    $slotsTime = $time->listar($idPerfil);
+
+    // Perfil sem Pokemon ainda: o pop-up de escolha aparece em cima do mapa.
+    if (!$inicial->perfilTemInicial($idPerfil)) {
+        $iniciais = $inicial->listar();
+        $mostrarInicial = count($iniciais) > 0;
+    }
 
 } catch (DomainException $erro) {
     if ($ehPost) {
@@ -130,6 +196,16 @@ if ($dados !== null && $dados['progresso'] !== null) {
 
 $escapar = static function ($valor): string {
     return htmlspecialchars((string) $valor, ENT_QUOTES, 'UTF-8');
+};
+
+// Cor do brilho de cada card, conforme o tipo (R, G, B).
+$corPorTipo = static function (string $tipo): string {
+    return match ($tipo) {
+        'GRAMA' => '130, 200, 120',
+        'FOGO' => '255, 100, 40',
+        'AGUA' => '100, 170, 255',
+        default => '255, 255, 255'
+    };
 };
 ?>
 <!DOCTYPE html>
@@ -341,6 +417,370 @@ $escapar = static function ($valor): string {
             .informacao { flex: 1; }
             .mapa { min-height: 620px; }
         }
+
+        /* ===== PAINEL: TIME (ao lado do mapa) ===== */
+
+        .area-jogo {
+            width: min(100% - 28px, 960px);
+            margin: 0 auto;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            gap: 24px;
+            flex-wrap: wrap;
+        }
+
+        .area-jogo .mapa {
+            margin: 0 0 35px;
+            flex: 0 0 auto;
+        }
+
+        .time {
+            width: 270px;
+            max-width: 94vw;
+            padding: 12px;
+            background: #eee9dc;
+            border: 3px solid #292e31;
+            box-shadow: 4px 4px #42484b;
+        }
+
+        .time-titulo {
+            margin: 0 0 10px;
+            text-align: center;
+            font-size: 18px;
+            letter-spacing: 4px;
+        }
+
+        .time-lista {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .time-slot {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .time-numero {
+            width: 18px;
+            flex: none;
+            text-align: center;
+            font-weight: bold;
+            color: #385b43;
+        }
+
+        .time-card {
+            flex: 1;
+            min-width: 0;
+            min-height: 54px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 5px 8px;
+            background: #f8f4e8;
+            border: 2px solid #34383a;
+            cursor: pointer;
+        }
+
+        .time-card:hover,
+        .time-card:focus-visible {
+            background: #e1f0dc;
+            outline: none;
+        }
+
+        .time-slot.vazio .time-card {
+            justify-content: center;
+            opacity: .6;
+        }
+
+        .time-slot.selecionado .time-card {
+            background: #f3d86c;
+            border-color: #20252a;
+            box-shadow: 0 0 0 3px #fff;
+            opacity: 1;
+        }
+
+        .time-foto {
+            width: 38px;
+            height: 38px;
+            flex: none;
+            border: 2px solid #34383a;
+            border-radius: 50%;
+            background-color: rgba(var(--cor), .45);
+            background-image: var(--img);
+            background-size: contain;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+
+        .time-dados {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            font-size: 12px;
+            line-height: 1.35;
+        }
+
+        .time-dados strong { font-size: 14px; }
+        .time-dados em { color: #a84d38; font-style: normal; font-weight: bold; }
+        .time-vazio { font-size: 12px; }
+
+        .time-trocar {
+            width: 32px;
+            height: 32px;
+            flex: none;
+            padding: 0;
+            border: 2px solid #292e31;
+            background: #d9efd5;
+            color: #20252a;
+            font: inherit;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        .time-trocar:hover { background: #b9e2b3; }
+
+        .time-aviso {
+            margin: 10px 0 0;
+            min-height: 2.8em;
+            font-size: 12px;
+            line-height: 1.4;
+            text-align: center;
+        }
+
+        .time-aviso.com-erro { color: #a8281b; }
+
+        /* ===== POP-UP: ESCOLHA DO POKEMON INICIAL ===== */
+
+        body.inicial-aberto { overflow: hidden; }
+
+        .inicial-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            display: flex;
+            padding: 20px;
+            overflow-y: auto;
+            background: rgba(5, 5, 5, 0.82);
+            backdrop-filter: blur(3px);
+            animation: inicial-aparecer 0.35s ease;
+        }
+
+        @keyframes inicial-aparecer {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .inicial-modal {
+            width: 100%;
+            max-width: 900px;
+            margin: auto;
+            text-align: center;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+
+        .inicial-modal h2 {
+            margin: 0 0 12px;
+            font-size: 28px;
+            letter-spacing: 5px;
+            text-transform: uppercase;
+        }
+
+        .inicial-subtitulo {
+            margin: 0 0 40px;
+            font-size: 12px;
+            letter-spacing: 3px;
+            color: #888;
+        }
+
+        .inicial-lista {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 35px;
+            padding: 15px 0;
+        }
+
+        /* CARD */
+
+        .inicial-card {
+            --cor: 255, 255, 255;
+
+            width: 230px;
+            height: 340px;
+            padding: 0;
+
+            position: relative;
+            overflow: hidden;
+
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+
+            background: radial-gradient(circle at 50% 35%, rgba(var(--cor), 0.35), #111 70%);
+            border: 1px solid #333;
+            color: white;
+            font-family: Arial, sans-serif;
+            cursor: pointer;
+
+            transition:
+                transform 0.35s ease,
+                box-shadow 0.35s ease,
+                border-color 0.35s ease;
+        }
+
+        .inicial-card::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+
+            background-image: var(--img);
+            background-size: contain;
+            background-position: center 40%;
+            background-repeat: no-repeat;
+
+            opacity: 0.25;
+            filter: grayscale(100%);
+
+            transition:
+                opacity 0.45s ease,
+                filter 0.45s ease,
+                transform 0.6s ease;
+        }
+
+        .inicial-card::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(
+                to top,
+                rgba(0, 0, 0, 0.95),
+                rgba(0, 0, 0, 0.15) 65%,
+                rgba(0, 0, 0, 0.1)
+            );
+            pointer-events: none;
+        }
+
+        .inicial-card:hover,
+        .inicial-card:focus-visible {
+            transform: scale(1.08);
+            border-color: rgba(255, 255, 255, 0.85);
+            box-shadow:
+                0 0 10px rgba(var(--cor), 0.45),
+                0 0 25px rgba(var(--cor), 0.2);
+            outline: none;
+        }
+
+        .inicial-card:hover::before,
+        .inicial-card:focus-visible::before {
+            opacity: 1;
+            filter: grayscale(0%);
+            transform: scale(1.08);
+        }
+
+        .inicial-card.selecionado {
+            transform: scale(1.05);
+            border-color: white;
+            box-shadow:
+                0 0 12px rgba(var(--cor), 0.7),
+                0 0 30px rgba(var(--cor), 0.35);
+        }
+
+        .inicial-card.selecionado::before {
+            opacity: 1;
+            filter: grayscale(0%);
+        }
+
+        .inicial-info {
+            position: relative;
+            z-index: 2;
+            width: 100%;
+            padding: 25px 10px;
+        }
+
+        .inicial-info h3 {
+            margin: 0;
+            font-size: 19px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .inicial-info p {
+            margin: 8px 0 0;
+            font-size: 10px;
+            letter-spacing: 2px;
+            color: #aaa;
+            text-transform: uppercase;
+        }
+
+        .inicial-info .inicial-status { color: #ddd; }
+
+        /* RODAPE: TEXTO + CONFIRMAR */
+
+        .inicial-selecao {
+            margin-top: 40px;
+            font-size: 13px;
+            letter-spacing: 3px;
+            color: #888;
+        }
+
+        .inicial-descricao {
+            max-width: 520px;
+            min-height: 3.2em;
+            margin: 12px auto 0;
+            font-size: 13px;
+            line-height: 1.6;
+            color: #aaa;
+        }
+
+        .inicial-erro {
+            min-height: 1.4em;
+            margin: 8px 0 0;
+            font-size: 13px;
+            color: #ff8585;
+        }
+
+        .inicial-confirmar {
+            margin-top: 14px;
+            padding: 14px 44px;
+            background: transparent;
+            color: white;
+            border: 1px solid white;
+            font-family: Arial, sans-serif;
+            font-size: 13px;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: background 0.3s ease, color 0.3s ease, opacity 0.3s ease;
+        }
+
+        .inicial-confirmar:hover:not(:disabled) {
+            background: white;
+            color: #050505;
+        }
+
+        .inicial-confirmar:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        @media (max-width: 650px) {
+            .inicial-lista { gap: 25px; }
+            .inicial-card { width: 200px; height: 290px; }
+            .inicial-modal h2 { font-size: 22px; letter-spacing: 3px; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .inicial-overlay { animation: none; }
+            .inicial-card, .inicial-card::before { transition: none; }
+        }
     </style>
 </head>
 <body>
@@ -376,6 +816,7 @@ $escapar = static function ($valor): string {
 <?php else: ?>
 
     <main>
+        <div class="area-jogo">
         <section class="mapa" aria-label="Mapa da area">
             <svg class="caminhos" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
                 <?php foreach ($dados['conexoes'] as $conexao): ?>
@@ -424,6 +865,36 @@ $escapar = static function ($valor): string {
             <?php endforeach; ?>
         </section>
 
+        <aside class="time" aria-label="Time">
+            <h2 class="time-titulo">TIME</h2>
+
+            <ol class="time-lista" id="time-lista">
+                <?php foreach ($slotsTime as $posicao => $slot): ?>
+                    <li class="time-slot<?= $slot === null ? ' vazio' : '' ?>" data-posicao="<?= (int) $posicao ?>">
+                        <span class="time-numero"><?= (int) $posicao ?></span>
+
+                        <div class="time-card" role="button" tabindex="0" aria-label="Posição <?= (int) $posicao ?> do time">
+                            <?php if ($slot !== null): ?>
+                                <div class="time-foto" style="--cor: <?= $corPorTipo((string) $slot['tipo']) ?>; --img: url('<?= $escapar($slot['imagem']) ?>');"></div>
+                                <div class="time-dados">
+                                    <strong><?= $escapar($slot['nome']) ?></strong>
+                                    <span><?= $escapar($slot['tipo']) ?> • HP <?= (int) $slot['hp_atual'] ?>/<?= (int) $slot['hp_max'] ?></span>
+                                    <?php if ((int) $slot['desmaiado'] === 1): ?><em>DESMAIADO</em><?php endif; ?>
+                                </div>
+                            <?php else: ?>
+                                <span class="time-vazio">— vazio —</span>
+                            <?php endif; ?>
+                        </div>
+
+                        <button type="button" class="time-trocar" aria-label="Mover posição <?= (int) $posicao ?>" title="Trocar de posição">⇄</button>
+                    </li>
+                <?php endforeach; ?>
+            </ol>
+
+            <p class="time-aviso" id="time-aviso">Clique em um Pokémon e depois na posição para onde quer levá-lo.</p>
+        </aside>
+        </div>
+
         <section class="painel-inferior">
             <?php if (($tipoNoAtual === 'BATALHA' || $tipoNoAtual === 'CHEFE') && !$dados['batalha_vencida']): ?>
                 <strong>Você chegou a um ponto de batalha!</strong><br>
@@ -447,6 +918,47 @@ $escapar = static function ($valor): string {
         </section>
     </main>
 
+<?php endif; ?>
+
+<?php if ($mostrarInicial): ?>
+    <div class="inicial-overlay" id="inicial-overlay" role="dialog" aria-modal="true" aria-labelledby="inicial-titulo">
+        <div class="inicial-modal">
+
+            <h2 id="inicial-titulo">Escolha seu inicial</h2>
+            <p class="inicial-subtitulo">ESTE SERÁ SEU PRIMEIRO PARCEIRO NA JORNADA</p>
+
+            <div class="inicial-lista">
+                <?php foreach ($iniciais as $pokemon): ?>
+                    <button
+                        type="button"
+                        class="inicial-card"
+                        style="--cor: <?= $corPorTipo((string) $pokemon['tipo']) ?>; --img: url('<?= $escapar($pokemon['imagem']) ?>');"
+                        data-id-pokemon="<?= (int) $pokemon['id'] ?>"
+                        data-nome="<?= $escapar($pokemon['nome']) ?>"
+                        data-descricao="<?= $escapar($pokemon['descricao']) ?>"
+                        aria-pressed="false"
+                    >
+                        <div class="inicial-info">
+                            <h3><?= $escapar($pokemon['nome']) ?></h3>
+                            <p><?= $escapar($pokemon['tipo']) ?> • <?= $escapar($pokemon['nome_ataque']) ?></p>
+                            <p class="inicial-status">
+                                HP <?= (int) $pokemon['hp'] ?> &nbsp;
+                                ATK <?= (int) $pokemon['atk'] ?> &nbsp;
+                                VEL <?= (int) $pokemon['vel'] ?>
+                            </p>
+                        </div>
+                    </button>
+                <?php endforeach; ?>
+            </div>
+
+            <div class="inicial-selecao" id="inicial-selecao">NENHUM POKÉMON SELECIONADO</div>
+            <p class="inicial-descricao" id="inicial-descricao"></p>
+            <p class="inicial-erro" id="inicial-erro" role="alert"></p>
+
+            <button type="button" class="inicial-confirmar" id="inicial-confirmar" disabled>Confirmar</button>
+
+        </div>
+    </div>
 <?php endif; ?>
 
 <script>
@@ -482,6 +994,181 @@ $escapar = static function ($valor): string {
             }
         });
     });
+
+    // ===== Pop-up de escolha do Pokemon inicial =====
+    (function () {
+        const overlay = document.getElementById('inicial-overlay');
+        if (!overlay) return;
+
+        document.body.classList.add('inicial-aberto');
+
+        const cards = overlay.querySelectorAll('.inicial-card');
+        const textoSelecao = document.getElementById('inicial-selecao');
+        const textoDescricao = document.getElementById('inicial-descricao');
+        const textoErro = document.getElementById('inicial-erro');
+        const botaoConfirmar = document.getElementById('inicial-confirmar');
+        let idEscolhido = null;
+
+        cards.forEach((card) => {
+            card.addEventListener('click', () => {
+                cards.forEach((outro) => {
+                    outro.classList.remove('selecionado');
+                    outro.setAttribute('aria-pressed', 'false');
+                });
+
+                card.classList.add('selecionado');
+                card.setAttribute('aria-pressed', 'true');
+
+                idEscolhido = card.dataset.idPokemon;
+                textoSelecao.textContent = 'SELECIONADO: ' + card.dataset.nome.toUpperCase();
+                textoDescricao.textContent = card.dataset.descricao;
+                textoErro.textContent = '';
+                botaoConfirmar.disabled = false;
+            });
+        });
+
+        botaoConfirmar.addEventListener('click', async () => {
+            if (idEscolhido === null) return;
+
+            botaoConfirmar.disabled = true;
+            textoErro.textContent = '';
+
+            const dados = new URLSearchParams();
+            dados.set('acao', 'escolher_inicial');
+            dados.set('id_pokemon', idEscolhido);
+
+            try {
+                const resposta = await fetch('mapa.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: dados.toString()
+                });
+
+                const resultado = await resposta.json();
+
+                if (!resposta.ok || !resultado.sucesso) {
+                    throw new Error(resultado.mensagem || 'Nao foi possivel salvar a escolha.');
+                }
+
+                window.location.reload();
+
+            } catch (erro) {
+                textoErro.textContent = erro.message;
+                botaoConfirmar.disabled = false;
+            }
+        });
+
+        // Foco no primeiro card para dar para escolher so com o teclado.
+        if (cards.length > 0) cards[0].focus();
+    })();
+
+    // ===== Painel TIME: trocar Pokemon de posicao =====
+    (function () {
+        const lista = document.getElementById('time-lista');
+        if (!lista) return;
+
+        const aviso = document.getElementById('time-aviso');
+        const textoPadrao = aviso.textContent;
+        let origem = null;      // posicao (li) escolhida primeiro
+        let ocupado = false;    // evita cliques enquanto o servidor responde
+
+        function mostrar(texto, erro) {
+            aviso.textContent = texto;
+            aviso.classList.toggle('com-erro', Boolean(erro));
+        }
+
+        function limpar() {
+            if (origem) origem.classList.remove('selecionado');
+            origem = null;
+        }
+
+        async function clicou(slot) {
+            if (ocupado) return;
+
+            // 1o clique: escolhe o Pokemon que vai mudar de lugar.
+            if (origem === null) {
+                if (slot.classList.contains('vazio')) {
+                    mostrar('Escolha primeiro um Pokémon.', true);
+                    return;
+                }
+                origem = slot;
+                slot.classList.add('selecionado');
+                mostrar('Agora clique na posição de destino.', false);
+                return;
+            }
+
+            // Clicou na mesma posicao de novo: cancela.
+            if (origem === slot) {
+                limpar();
+                mostrar(textoPadrao, false);
+                return;
+            }
+
+            // 2o clique: pede ao servidor para trocar (ou mover para posicao vazia).
+            const de = origem;
+            ocupado = true;
+
+            const dados = new URLSearchParams();
+            dados.set('acao', 'mover_time');
+            dados.set('de', de.dataset.posicao);
+            dados.set('para', slot.dataset.posicao);
+
+            try {
+                const resposta = await fetch('mapa.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: dados.toString()
+                });
+
+                const resultado = await resposta.json();
+
+                if (!resposta.ok || !resultado.sucesso) {
+                    throw new Error(resultado.mensagem || 'Nao foi possivel mover o Pokemon.');
+                }
+
+                // Troca o conteudo das duas posicoes na tela.
+                const cartaoDe = de.querySelector('.time-card');
+                const cartaoPara = slot.querySelector('.time-card');
+                const htmlDe = cartaoDe.innerHTML;
+                cartaoDe.innerHTML = cartaoPara.innerHTML;
+                cartaoPara.innerHTML = htmlDe;
+
+                const deVazio = de.classList.contains('vazio');
+                const paraVazio = slot.classList.contains('vazio');
+                de.classList.toggle('vazio', paraVazio);
+                slot.classList.toggle('vazio', deVazio);
+
+                limpar();
+                mostrar('Time atualizado!', false);
+
+            } catch (erro) {
+                limpar();
+                mostrar(erro.message, true);
+            } finally {
+                ocupado = false;
+            }
+        }
+
+        lista.querySelectorAll('.time-slot').forEach((slot) => {
+            const cartao = slot.querySelector('.time-card');
+            const botao = slot.querySelector('.time-trocar');
+
+            cartao.addEventListener('click', () => clicou(slot));
+            cartao.addEventListener('keydown', (evento) => {
+                if (evento.key === 'Enter' || evento.key === ' ') {
+                    evento.preventDefault();
+                    clicou(slot);
+                }
+            });
+            botao.addEventListener('click', () => clicou(slot));
+        });
+    })();
 </script>
 
 </body>
