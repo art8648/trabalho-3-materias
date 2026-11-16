@@ -60,26 +60,6 @@ class Time
         return $posicoes;
     }
 
-    /** Lista todos os Pokemon capturados pelo perfil, inclusive os que estao fora da equipe. */
-    public function listarCapturados(int $idPerfil): array
-    {
-        $consulta = $this->pdo->prepare("
-            SELECT
-                pc.id AS id_capturado, pc.hp_atual, pc.desmaiado, pc.sexo,
-                pc.status_condicao, pc.data_captura, p.nome, p.imagem, p.hp AS hp_max,
-                tp.posicao, t.nome AS tipo
-            FROM pokemon_capturado pc
-            INNER JOIN pokemon p ON p.id = pc.id_pokemon
-            INNER JOIN tipo_pokemon t ON t.id = p.tipo_id
-            LEFT JOIN times tm ON tm.id_perfil = pc.id_perfil
-            LEFT JOIN time_pokemon tp ON tp.id_time = tm.id AND tp.id_pokemon_capturado = pc.id
-            WHERE pc.id_perfil = :id_perfil
-            ORDER BY CASE WHEN tp.posicao IS NULL THEN 1 ELSE 0 END, tp.posicao ASC, pc.data_captura ASC, pc.id ASC
-        ");
-        $consulta->execute(['id_perfil' => $idPerfil]);
-        return $consulta->fetchAll();
-    }
-
     /**
      * Move o Pokemon da posicao $de para a posicao $para.
      * Se a posicao de destino estiver vazia, o Pokemon so muda de lugar.
