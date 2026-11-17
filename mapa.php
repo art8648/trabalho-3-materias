@@ -129,9 +129,8 @@ try {
         exit;
     }
 
-    // O time e carregado primeiro: o painel aparece mesmo que o mapa falhe.
-    $slotsTime = $time->listar($idPerfil);
     $dados = $mapa->carregarMapa($idPerfil, $idUsuario);
+    $slotsTime = $time->listar($idPerfil);
 
     // Perfil sem Pokemon ainda: o pop-up de escolha aparece em cima do mapa.
     if (!$inicial->perfilTemInicial($idPerfil)) {
@@ -169,23 +168,7 @@ try {
     $dados = null;
 }
 
-// Se o time nao pode ser lido, mostra as posicoes vazias mesmo assim.
-if ($slotsTime === []) {
-    $slotsTime = array_fill(1, Time::POSICOES, null);
-}
-
-// O mapa so e desenhado quando a area existe e tem pontos cadastrados.
-$mapaPronto = !isset($mensagemErro)
-    && $dados !== null
-    && $dados['area'] !== null
-    && count($dados['nos']) > 0;
-
-// BATALHA com codigo TREINADOR_* = treinador; os demais BATALHA = mato (Pokemon selvagem).
-$iconePorTipo = static function (string $tipo, string $codigo = ''): string {
-    if ($tipo === 'BATALHA' && str_starts_with($codigo, 'TREINADOR')) {
-        return '🥋';
-    }
-
+$iconePorTipo = static function (string $tipo): string {
     return match ($tipo) {
         'INICIO' => '🧑🏻',
         'BATALHA' => '🌿',
@@ -514,6 +497,18 @@ $corPorTipo = static function (string $tipo): string {
 
         .acesso-placeholder:last-child { margin-bottom: 0; }
 
+        .acesso-placeholder[href] {
+            cursor: pointer;
+            text-decoration: none;
+            transition: transform .12s ease, background .12s ease;
+        }
+        .acesso-placeholder[href]:hover {
+            background: #e5efd9;
+            border-style: solid;
+            color: #385b43;
+            transform: translateY(-2px);
+        }
+
         .acesso-icone {
             font-size: 30px;
             line-height: 1;
@@ -671,16 +666,6 @@ $corPorTipo = static function (string $tipo): string {
         }
 
         .time-aviso.com-erro { color: #a8281b; }
-
-        .mapa-aviso .erro,
-        .mapa-aviso .sem-area {
-            width: 100%;
-            margin: 0;
-        }
-
-        @media (max-width: 900px) {
-            .mapa-aviso { grid-row: 1; }
-        }
 
         /* ===== POP-UP: ESCOLHA DO POKEMON INICIAL ===== */
 
@@ -939,10 +924,26 @@ $corPorTipo = static function (string $tipo): string {
         : 'PEAKMON: THE BIGOLIN CRISIS' ?>
 </h1>
 
-<main>
-    <div class="area-jogo">
-        <aside class="time" aria-label="Seu time">
-            <h2 class="time-titulo">SEU TIME</h2>
+<?php if (isset($mensagemErro)): ?>
+    <div class="erro"><?= $escapar($mensagemErro) ?></div>
+<?php elseif ($dados === null): ?>
+    <div class="erro">Nao foi possivel carregar os dados do mapa.</div>
+<?php elseif ($dados['area'] === null): ?>
+    <div class="sem-area">
+        <h2>O mapa ainda nao foi cadastrado!</h2>
+        <p>O perfil e o save estao funcionando, mas ainda precisamos cadastrar a area, os pontos e os caminhos no banco de dados.</p>
+    </div>
+<?php elseif (count($dados['nos']) === 0): ?>
+    <div class="sem-area">
+        <h2>Esta area ainda nao possui pontos.</h2>
+        <p>Cadastre os nos da area na tabela <strong>area_no</strong>.</p>
+    </div>
+<?php else: ?>
+
+    <main>
+        <div class="area-jogo">
+        <aside class="time" aria-label="Time">
+            <h2 class="time-titulo">TIME</h2>
 
             <ol class="time-lista" id="time-lista">
                 <?php foreach ($slotsTime as $posicao => $slot): ?>
@@ -970,25 +971,6 @@ $corPorTipo = static function (string $tipo): string {
             <p class="time-aviso" id="time-aviso">Clique em um Pokémon e depois na posição para onde quer levá-lo.</p>
         </aside>
 
-        <?php if (!$mapaPronto): ?>
-            <div class="mapa-aviso">
-                <?php if (isset($mensagemErro)): ?>
-                    <div class="erro"><?= $escapar($mensagemErro) ?></div>
-                <?php elseif ($dados === null): ?>
-                    <div class="erro">Nao foi possivel carregar os dados do mapa.</div>
-                <?php elseif ($dados['area'] === null): ?>
-                    <div class="sem-area">
-                        <h2>O mapa ainda nao foi cadastrado!</h2>
-                        <p>O banco ainda nao tem o mapa. Importe o arquivo <strong>peakmon_base.sql</strong> no MySQL.</p>
-                    </div>
-                <?php else: ?>
-                    <div class="sem-area">
-                        <h2>Esta area ainda nao possui pontos.</h2>
-                        <p>Cadastre os nos da area na tabela <strong>area_no</strong>.</p>
-                    </div>
-                <?php endif; ?>
-            </div>
-        <?php else: ?>
         <section class="mapa" aria-label="Mapa da area">
             <svg class="caminhos" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
                 <?php foreach ($dados['conexoes'] as $conexao): ?>
@@ -1008,7 +990,7 @@ $corPorTipo = static function (string $tipo): string {
                     $proximo = in_array($idNo, $idsProximos, true);
                     $x = max(3, min(97, (int) $no['pos_x']));
                     $y = max(3, min(97, (int) $no['pos_y']));
-                    $icone = $iconePorTipo($no['tipo_no'], (string) $no['codigo']);
+                    $icone = $iconePorTipo($no['tipo_no']);
                     $tituloNo = $no['titulo'];
                     $descricaoNo = $no['descricao'] ?? '';
                 ?>
@@ -1036,15 +1018,14 @@ $corPorTipo = static function (string $tipo): string {
                 <?php endif; ?>
             <?php endforeach; ?>
         </section>
-        <?php endif; ?>
 
         <aside class="acessos-laterais" aria-label="Acessos do jogo">
             <h2 class="acessos-titulo">ACESSOS</h2>
 
-            <div class="acesso-placeholder" aria-label="Espaco reservado para mochila">
+            <a class="acesso-placeholder" href="mochila.php" aria-label="Abrir mochila e gerenciar itens e Pokemon">
                 <span class="acesso-icone" aria-hidden="true">🎒</span>
                 <span>MOCHILA</span>
-            </div>
+            </a>
 
             <div class="acesso-placeholder" aria-label="Espaco reservado para loja">
                 <span class="acesso-icone" aria-hidden="true">🛒</span>
@@ -1055,7 +1036,6 @@ $corPorTipo = static function (string $tipo): string {
         </aside>
         </div>
 
-        <?php if ($mapaPronto): ?>
         <section class="painel-inferior">
             <?php if (($tipoNoAtual === 'BATALHA' || $tipoNoAtual === 'CHEFE') && !$dados['batalha_vencida']): ?>
                 <strong>Você chegou a um ponto de batalha!</strong><br>
@@ -1074,11 +1054,12 @@ $corPorTipo = static function (string $tipo): string {
         </section>
 
         <section class="legenda">
-            🌿 Mato (Pokémon selvagem) &nbsp; 🥋 Treinador &nbsp; 🔴 Captura &nbsp; 🎁 Item<br>
-            🛒 Loja &nbsp; 🏥 Centro Pokémon &nbsp; 📡 Evento &nbsp; ⭐ Chefe
+            🌿 Batalha &nbsp; 🔴 Captura &nbsp; 🎁 Item &nbsp; 🛒 Loja<br>
+            🏥 Cura &nbsp; 📡 Evento &nbsp; ⭐ Chefe &nbsp; 🏁 Final
         </section>
-        <?php endif; ?>
     </main>
+
+<?php endif; ?>
 
 <?php if ($mostrarInicial): ?>
     <div class="inicial-overlay" id="inicial-overlay" role="dialog" aria-modal="true" aria-labelledby="inicial-titulo">
@@ -1336,8 +1317,7 @@ $corPorTipo = static function (string $tipo): string {
         botao.addEventListener('click', async () => {
             const certeza = confirm(
                 'Reiniciar este perfil?\n\n' +
-                'Seu personagem e seus Pokémon (inclusive o inicial) serão apagados, ' +
-                'e sua posição no mapa volta para o início. ' +
+                'Seu personagem e seus Pokémon (inclusive o inicial) serão apagados. ' +
                 'Os outros perfis não são afetados.'
             );
             if (!certeza) return;
