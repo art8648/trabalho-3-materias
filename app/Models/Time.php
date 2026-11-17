@@ -161,4 +161,26 @@ class Time
             throw $erro;
         }
     }
+    /** Primeira posicao livre (1 a 6) ou null se o time esta cheio. */
+    public function proximaPosicaoLivre(int $idPerfil): ?int
+    {
+        // Trava a linha do time para duas capturas simultaneas nao disputarem a mesma vaga.
+        $t = $this->pdo->prepare('SELECT id FROM times WHERE id_perfil = :p FOR UPDATE');
+        $t->execute(['p' => $idPerfil]);
+        $idTime = $t->fetchColumn();
+        if ($idTime === false) {
+            throw new DomainException('Time nao encontrado.');
+        }
+
+        $c = $this->pdo->prepare('SELECT posicao FROM time_pokemon WHERE id_time = :t AND posicao BETWEEN 1 AND 6');
+        $c->execute(['t' => (int) $idTime]);
+        $ocupadas = array_map('intval', $c->fetchAll(\PDO::FETCH_COLUMN));
+
+        for ($p = 1; $p <= self::POSICOES; $p++) {
+            if (!in_array($p, $ocupadas, true)) {
+                return $p;
+            }
+        }
+        return null;
+    }
 }

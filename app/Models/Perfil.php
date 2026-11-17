@@ -99,8 +99,8 @@ class Perfil
     }
 
     /**
-     * Reinicia as escolhas de UM perfil: apaga os Pokemon capturados
-     * (o time esvazia por cascata) e limpa o personagem.
+     * Reinicia UM perfil: apaga os Pokemon capturados (o time esvazia por
+     * cascata), limpa o personagem e volta a posicao no mapa para o inicio.
      */
     public function reiniciarEscolhas(int $idPerfil, int $idUsuario): void
     {
@@ -134,6 +134,22 @@ class Perfil
                 'id_perfil' => $idPerfil,
                 'id_usuario' => $idUsuario
             ]);
+
+            // Volta a posicao no mapa para o ponto INICIO da primeira area
+            // (o mapa usa uma unica area). So mexe no progresso deste perfil.
+            $voltarAoInicio = $this->pdo->prepare("
+                UPDATE progresso_area pa
+                INNER JOIN area_no n
+                    ON n.id_area = pa.id_area
+                   AND n.tipo_no = 'INICIO'
+                SET pa.id_no_atual = n.id,
+                    pa.estado = 'DISPONIVEL'
+                WHERE pa.id_perfil = :id_perfil
+                  AND pa.id_area = (
+                      SELECT id FROM area_jogo ORDER BY ordem ASC LIMIT 1
+                  )
+            ");
+            $voltarAoInicio->execute(['id_perfil' => $idPerfil]);
 
             $this->pdo->commit();
 

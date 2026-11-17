@@ -70,67 +70,107 @@ try {
 
     <title>Escolher Perfil</title>
 
-    <style>
-        body {
-            margin: 0;
-            min-height: 100vh;
-            background: #17252d;
-            color: white;
-            font-family: monospace;
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400..700&display=swap">
+<style>
+    * { box-sizing: border-box; }
 
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            flex-direction: column;
-        }
+    body {
+        margin: 0;
+        min-height: 100vh;
+        padding: 32px 16px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        font-family: 'Pixelify Sans', monospace;
+        background:
+            radial-gradient(circle at 50% 0%, rgba(141, 224, 165, .18), transparent 55%),
+            linear-gradient(135deg, #10202a 0%, #17252d 50%, #1b3a33 100%);
+    }
 
-        h1 {
-            margin-bottom: 40px;
-        }
+    h1 {
+        margin: 0 0 8px;
+        font-size: clamp(28px, 5vw, 44px);
+        letter-spacing: 6px;
+        text-align: center;
+        text-shadow: 0 4px 0 rgba(0, 0, 0, .45);
+    }
 
-        .perfis {
-            display: flex;
-            gap: 30px;
-        }
+    .jogador { margin: 0 0 36px; color: #a9bcc5; font-size: 16px; text-align: center; }
+    .jogador strong { color: #fff; }
+    .jogador a { margin-left: 6px; color: #8de0a5; text-decoration: none; border-bottom: 1px dashed currentColor; }
+    .jogador a:hover { color: #fff; }
 
-        .perfil-form {
-            margin: 0;
-        }
+    .erro {
+        margin: 0 0 24px;
+        padding: 10px 18px;
+        color: #ffb3b3;
+        background: rgba(255, 90, 90, .12);
+        border: 2px solid #ff8585;
+        border-radius: 8px;
+    }
 
-        .perfil {
-            width: 220px;
-            height: 230px;
-            background: #263d49;
-            border: 3px solid #52616a;
-            color: white;
-            cursor: pointer;
-            font-family: monospace;
-            transition: 0.2s;
-        }
+    .perfis { display: flex; flex-wrap: wrap; justify-content: center; gap: 32px; }
+    .perfil-form { margin: 0; }
 
-        .perfil:hover {
-            border-color: #8de0a5;
-            transform: translateY(-5px);
-        }
+    .perfil {
+        width: 240px;
+        padding: 28px 20px 24px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        color: #fff;
+        font-family: inherit;
+        cursor: pointer;
+        background: linear-gradient(180deg, #2d4856, #223742);
+        border: 3px solid #52616a;
+        border-radius: 10px;
+        box-shadow: 0 6px 0 #0c161b, 0 14px 28px rgba(0, 0, 0, .35);
+        transition: transform .2s, border-color .2s, box-shadow .2s;
+    }
 
-        .avatar {
-            font-size: 60px;
-        }
+    .perfil:hover,
+    .perfil:focus-visible {
+        transform: translateY(-6px);
+        border-color: #8de0a5;
+        box-shadow: 0 10px 0 #0c161b, 0 0 24px rgba(141, 224, 165, .35);
+        outline: none;
+    }
 
-        .perfil h2 {
-            margin-top: 15px;
-        }
+    .perfil:active { transform: translateY(-2px); }
 
-        .erro {
-            color: #ff8585;
-            margin-bottom: 20px;
-        }
+    .avatar {
+        width: 92px;
+        height: 92px;
+        display: grid;
+        place-items: center;
+        font-size: 48px;
+        background: rgba(0, 0, 0, .28);
+        border: 3px solid #8de0a5;
+        border-radius: 50%;
+    }
 
-        @media(max-width: 550px) {
-            .perfis {
-                flex-direction: column;
-            }
-        }
+    .perfil h2 { margin: 6px 0 0; font-size: 22px; }
+    .perfil p { margin: 0; font-size: 14px; color: #a9bcc5; }
+
+    .entrar {
+        margin-top: 8px;
+        padding: 6px 16px;
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: 2px;
+        color: #17252d;
+        background: #8de0a5;
+        border-radius: 6px;
+    }
+
+    @media (max-width: 550px) {
+        .perfis { flex-direction: column; align-items: center; }
+    }
     </style>
 </head>
 
@@ -163,22 +203,13 @@ try {
                 >
 
                 <button class="perfil" type="submit">
-
                     <div class="avatar">
                         <?= (int)($perfil['numero_perfil'] ?? ($indice + 1)) === 1 ? '🧢' : '⚔️' ?>
                     </div>
-
-                    <h2>
-                        <?= htmlspecialchars(
-                            $perfil['nome_perfil'],
-                            ENT_QUOTES,
-                            'UTF-8'
-                        ) ?>
-                    </h2>
-
+                    <h2><?= htmlspecialchars($perfil['nome_perfil'], ENT_QUOTES, 'UTF-8') ?></h2>
                     <p>Save independente</p>
-
-                </button>
+                    <span class="entrar">JOGAR</span>
+                    </button>
 
             </form>
 
