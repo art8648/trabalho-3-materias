@@ -2,6 +2,18 @@ DROP DATABASE IF EXISTS peakmon_bigolin_crisis;
 CREATE DATABASE IF NOT EXISTS peakmon_bigolin_crisis
   CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE peakmon_bigolin_crisis;
+SELECT
+    a.nome AS area,
+    p.nome AS chefe
+FROM area_jogo a
+JOIN personagem p
+    ON p.id = a.id_personagem_chefe
+WHERE a.id = 1;
+SELECT codigo, titulo, p.nome AS personagem
+FROM area_no n
+LEFT JOIN personagem p ON p.id = n.id_personagem
+WHERE n.id_area = 1
+AND n.tipo_no = 'CHEFE';
 SET NAMES utf8mb4;
 -- 1. TIPOS E EFETIVIDADE
 CREATE TABLE tipo_pokemon (
@@ -1279,12 +1291,6 @@ INNER JOIN pokemon AS destino
 INNER JOIN item
     ON item.nome = 'Pedra Universal';
 
--- =====================================================================
--- 12. MAPA DA AREA 1 (formato "losango": inicio no topo, chefe embaixo)
--- Vem junto deste arquivo: uma unica importacao cria banco + mapa.
--- Texto sem acento de proposito (igual ao resto do arquivo).
--- =====================================================================
-
 -- 1) O chefe precisa existir como adversario (jogavel = FALSE).
 --    Se ja existir um personagem 'Bigolin', nada e inserido.
 INSERT INTO personagem (nome, jogavel, secreto, imagem)
@@ -1385,3 +1391,25 @@ FROM (
 ) AS c
 JOIN area_no o ON o.id_area = @id_area AND o.codigo = c.de COLLATE utf8mb4_unicode_ci
 JOIN area_no d ON d.id_area = @id_area AND d.codigo = c.para COLLATE utf8mb4_unicode_ci;
+
+START TRANSACTION;
+
+-- Troca o chefe oficial da área para Hiago
+UPDATE area_jogo
+SET id_personagem_chefe = (
+    SELECT id FROM personagem WHERE nome = 'Hiago'
+)
+WHERE id = 1;
+
+-- Troca o personagem e o título do ponto final
+UPDATE area_no
+SET
+    id_personagem = (
+        SELECT id FROM personagem WHERE nome = 'Hiago'
+    ),
+    titulo = 'Hiago',
+    descricao = 'O chefe da area. Boa sorte!'
+WHERE id_area = 1
+AND tipo_no = 'CHEFE';
+
+COMMIT;
