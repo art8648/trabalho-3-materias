@@ -1127,6 +1127,8 @@ INSERT INTO personagem (nome, jogavel, secreto, imagem) VALUES
 ('Link', TRUE, FALSE, 'menu inicial/images/link.jpg'),
 ('The Knight', TRUE, FALSE, 'menu inicial/images/knight.jpg'),
 ('Mereoleona', TRUE, FALSE, 'menu inicial/images/mereoleona.jpg');
+('Hiago', FALSE, FALSE, 'menu inicial/images/hiago.jpg');
+('Bigolin', FALSE, FALSE, 'menu inicial/images/bigolin.jpg');
 INSERT INTO pokemon (
     api_id, nome, hp, atk, def, sp_atk, sp_def, vel,
     prioridade, tipo_id, nome_ataque, descricao,

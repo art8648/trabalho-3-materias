@@ -246,7 +246,7 @@ $corPorTipo = static function (string $tipo): string {
         }
 
         .topo {
-            width: min(100% - 28px, 900px);
+            width: min(calc(100% - 40px), 1280px);
             margin: 18px auto 12px;
             display: flex;
             justify-content: space-between;
@@ -431,28 +431,117 @@ $corPorTipo = static function (string $tipo): string {
 
         /* ===== PAINEL: TIME (ao lado do mapa) ===== */
 
+        /* ===== LAYOUT PRINCIPAL: TIME | MAPA | ACESSOS ===== */
+
         .area-jogo {
-            width: min(100% - 28px, 960px);
-            margin: 0 auto;
-            display: flex;
+            width: min(calc(100% - 40px), 1280px);
+            margin: 0 auto 30px;
+            display: grid;
+            grid-template-columns: 210px minmax(0, 620px) 180px;
             justify-content: center;
-            align-items: flex-start;
-            gap: 24px;
-            flex-wrap: wrap;
+            align-items: start;
+            gap: 18px;
         }
 
         .area-jogo .mapa {
-            margin: 0 0 35px;
-            flex: 0 0 auto;
+            width: 100%;
+            height: min(90vh, 900px);
+            min-height: 620px;
+            margin: 0;
         }
 
         .time {
-            width: 270px;
-            max-width: 94vw;
+            width: 100%;
+            max-width: none;
             padding: 12px;
             background: #eee9dc;
             border: 3px solid #292e31;
             box-shadow: 4px 4px #42484b;
+        }
+
+        /* Espaço reservado para a futura mochila e loja.
+           Nesta etapa os botões são apenas visuais, sem funcionalidades. */
+        .acessos-laterais {
+            width: 100%;
+            padding: 12px;
+            background: #eee9dc;
+            border: 3px solid #292e31;
+            box-shadow: 4px 4px #42484b;
+        }
+
+        .acessos-titulo {
+            margin: 0 0 12px;
+            text-align: center;
+            font-size: 15px;
+            letter-spacing: 2px;
+            color: #817866;
+        }
+
+        .acesso-placeholder {
+            width: 100%;
+            min-height: 92px;
+            margin: 0 0 10px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 7px;
+            border: 2px dashed #aaa28f;
+            background: #f8f4e8;
+            color: #77705f;
+            font: inherit;
+            font-weight: bold;
+            letter-spacing: 1px;
+            cursor: default;
+        }
+
+        .acesso-placeholder:last-child { margin-bottom: 0; }
+
+        .acesso-icone {
+            font-size: 30px;
+            line-height: 1;
+        }
+
+        .acesso-legenda {
+            margin: 10px 0 0;
+            color: #8a8372;
+            font-size: 10px;
+            line-height: 1.4;
+            text-align: center;
+        }
+
+        @media (max-width: 900px) {
+            .area-jogo {
+                width: min(calc(100% - 24px), 620px);
+                grid-template-columns: minmax(0, 1fr);
+                gap: 14px;
+            }
+
+            .area-jogo .mapa {
+                grid-row: 1;
+                height: min(110vw, 900px);
+                min-height: 620px;
+            }
+
+            .time { grid-row: 2; }
+            .acessos-laterais {
+                grid-row: 3;
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 10px;
+            }
+
+            .acessos-titulo,
+            .acesso-legenda { grid-column: 1 / -1; }
+
+            .acesso-placeholder { margin: 0; }
+        }
+
+        @media (max-width: 520px) {
+            .area-jogo .mapa {
+                min-height: 620px;
+                height: 150vw;
+            }
         }
 
         .time-titulo {
@@ -841,6 +930,35 @@ $corPorTipo = static function (string $tipo): string {
 
     <main>
         <div class="area-jogo">
+        <aside class="time" aria-label="Time">
+            <h2 class="time-titulo">TIME</h2>
+
+            <ol class="time-lista" id="time-lista">
+                <?php foreach ($slotsTime as $posicao => $slot): ?>
+                    <li class="time-slot<?= $slot === null ? ' vazio' : '' ?>" data-posicao="<?= (int) $posicao ?>">
+                        <span class="time-numero"><?= (int) $posicao ?></span>
+
+                        <div class="time-card" role="button" tabindex="0" aria-label="Posição <?= (int) $posicao ?> do time">
+                            <?php if ($slot !== null): ?>
+                                <div class="time-foto" style="--cor: <?= $corPorTipo((string) $slot['tipo']) ?>; --img: url('<?= $escapar($slot['imagem']) ?>');"></div>
+                                <div class="time-dados">
+                                    <strong><?= $escapar($slot['nome']) ?></strong>
+                                    <span><?= $escapar($slot['tipo']) ?> • HP <?= (int) $slot['hp_atual'] ?>/<?= (int) $slot['hp_max'] ?></span>
+                                    <?php if ((int) $slot['desmaiado'] === 1): ?><em>DESMAIADO</em><?php endif; ?>
+                                </div>
+                            <?php else: ?>
+                                <span class="time-vazio">— vazio —</span>
+                            <?php endif; ?>
+                        </div>
+
+                        <button type="button" class="time-trocar" aria-label="Mover posição <?= (int) $posicao ?>" title="Trocar de posição">⇄</button>
+                    </li>
+                <?php endforeach; ?>
+            </ol>
+
+            <p class="time-aviso" id="time-aviso">Clique em um Pokémon e depois na posição para onde quer levá-lo.</p>
+        </aside>
+
         <section class="mapa" aria-label="Mapa da area">
             <svg class="caminhos" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
                 <?php foreach ($dados['conexoes'] as $conexao): ?>
@@ -889,33 +1007,20 @@ $corPorTipo = static function (string $tipo): string {
             <?php endforeach; ?>
         </section>
 
-        <aside class="time" aria-label="Time">
-            <h2 class="time-titulo">TIME</h2>
+        <aside class="acessos-laterais" aria-label="Acessos do jogo">
+            <h2 class="acessos-titulo">ACESSOS</h2>
 
-            <ol class="time-lista" id="time-lista">
-                <?php foreach ($slotsTime as $posicao => $slot): ?>
-                    <li class="time-slot<?= $slot === null ? ' vazio' : '' ?>" data-posicao="<?= (int) $posicao ?>">
-                        <span class="time-numero"><?= (int) $posicao ?></span>
+            <div class="acesso-placeholder" aria-label="Espaco reservado para mochila">
+                <span class="acesso-icone" aria-hidden="true">🎒</span>
+                <span>MOCHILA</span>
+            </div>
 
-                        <div class="time-card" role="button" tabindex="0" aria-label="Posição <?= (int) $posicao ?> do time">
-                            <?php if ($slot !== null): ?>
-                                <div class="time-foto" style="--cor: <?= $corPorTipo((string) $slot['tipo']) ?>; --img: url('<?= $escapar($slot['imagem']) ?>');"></div>
-                                <div class="time-dados">
-                                    <strong><?= $escapar($slot['nome']) ?></strong>
-                                    <span><?= $escapar($slot['tipo']) ?> • HP <?= (int) $slot['hp_atual'] ?>/<?= (int) $slot['hp_max'] ?></span>
-                                    <?php if ((int) $slot['desmaiado'] === 1): ?><em>DESMAIADO</em><?php endif; ?>
-                                </div>
-                            <?php else: ?>
-                                <span class="time-vazio">— vazio —</span>
-                            <?php endif; ?>
-                        </div>
+            <div class="acesso-placeholder" aria-label="Espaco reservado para loja">
+                <span class="acesso-icone" aria-hidden="true">🛒</span>
+                <span>LOJA</span>
+            </div>
 
-                        <button type="button" class="time-trocar" aria-label="Mover posição <?= (int) $posicao ?>" title="Trocar de posição">⇄</button>
-                    </li>
-                <?php endforeach; ?>
-            </ol>
-
-            <p class="time-aviso" id="time-aviso">Clique em um Pokémon e depois na posição para onde quer levá-lo.</p>
+            <p class="acesso-legenda">Espaços reservados para as próximas etapas.</p>
         </aside>
         </div>
 
