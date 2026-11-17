@@ -2,18 +2,6 @@ DROP DATABASE IF EXISTS peakmon_bigolin_crisis;
 CREATE DATABASE IF NOT EXISTS peakmon_bigolin_crisis
   CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE peakmon_bigolin_crisis;
-SELECT
-    a.nome AS area,
-    p.nome AS chefe
-FROM area_jogo a
-JOIN personagem p
-    ON p.id = a.id_personagem_chefe
-WHERE a.id = 1;
-SELECT codigo, titulo, p.nome AS personagem
-FROM area_no n
-LEFT JOIN personagem p ON p.id = n.id_personagem
-WHERE n.id_area = 1
-AND n.tipo_no = 'CHEFE';
 SET NAMES utf8mb4;
 -- 1. TIPOS E EFETIVIDADE
 CREATE TABLE tipo_pokemon (
@@ -1413,3 +1401,140 @@ WHERE id_area = 1
 AND tipo_no = 'CHEFE';
 
 COMMIT;
+
+USE peakmon_bigolin_crisis;
+
+-- CADASTRO DA AREA 2
+
+START TRANSACTION;
+
+-- 1. Define os registros de origem e o chefe
+SET @id_area_origem = 1;
+
+SET @id_bigolin = (
+    SELECT id
+    FROM personagem
+    WHERE nome = 'Bigolin'
+      AND jogavel = FALSE
+    LIMIT 1
+);
+
+SET @id_pedra = (
+    SELECT id
+    FROM item
+    WHERE nome = 'Pedra Universal'
+    LIMIT 1
+);
+
+-- 2. Cria a nova area
+INSERT INTO area_jogo (
+    nome,
+    ordem,
+    id_personagem_chefe,
+    id_item_recompensa
+)
+VALUES (
+    'PEAKMON: THE BIGOLIN CRISIS - AREA 2',
+    2,
+    @id_bigolin,
+    @id_pedra
+);
+
+SET @id_area_nova = LAST_INSERT_ID();
+
+-- 3. Copia os 23 pontos da Area 1
+--    Cada ponto recebe novas coordenadas.
+--    Inicio e chefe continuam nas extremidades.
+
+INSERT INTO area_no (
+    id_area,
+    codigo,
+    tipo_no,
+    titulo,
+    descricao,
+    pos_x,
+    pos_y,
+    id_personagem
+)
+SELECT
+    @id_area_nova,
+    codigo,
+    tipo_no,
+
+    CASE
+        WHEN tipo_no = 'CHEFE' THEN 'Bigolin'
+        ELSE titulo
+    END,
+
+    CASE
+        WHEN tipo_no = 'CHEFE' THEN 'O chefe final da area. Boa sorte!'
+        ELSE descricao
+    END,
+
+    GREATEST(8, LEAST(92,
+        pos_x + FLOOR(RAND() * 17) - 8
+    )),
+
+    CASE
+        WHEN tipo_no = 'INICIO' THEN 5
+        WHEN tipo_no = 'CHEFE' THEN 96
+        ELSE GREATEST(12, LEAST(89,
+            pos_y + FLOOR(RAND() * 7) - 3
+        ))
+    END,
+
+    CASE
+        WHEN tipo_no = 'CHEFE' THEN @id_bigolin
+        ELSE NULL
+    END
+
+FROM area_no
+WHERE id_area = @id_area_origem;
+
+-- 4. Copia as conexoes usando os codigos dos pontos
+--    Assim, as conexoes apontam para os novos IDs.
+
+INSERT INTO area_conexao (
+    id_area,
+    id_no_origem,
+    id_no_destino
+)
+SELECT
+    @id_area_nova,
+    novo_origem.id,
+    novo_destino.id
+FROM area_conexao conexao
+JOIN area_no origem
+    ON origem.id = conexao.id_no_origem
+JOIN area_no destino
+    ON destino.id = conexao.id_no_destino
+JOIN area_no novo_origem
+    ON novo_origem.id_area = @id_area_nova
+   AND novo_origem.codigo = origem.codigo
+JOIN area_no novo_destino
+    ON novo_destino.id_area = @id_area_nova
+   AND novo_destino.codigo = destino.codigo
+WHERE conexao.id_area = @id_area_origem;
+
+COMMIT;
+
+-- 5. Conferencia
+SELECT
+    a.id,
+    a.nome AS area,
+    a.ordem,
+    p.nome AS chefe
+FROM area_jogo a
+JOIN personagem p
+    ON p.id = a.id_personagem_chefe
+WHERE a.id = @id_area_nova;
+
+SELECT
+    COUNT(*) AS total_pontos
+FROM area_no
+WHERE id_area = @id_area_nova;
+
+SELECT
+    COUNT(*) AS total_conexoes
+FROM area_conexao
+WHERE id_area = @id_area_nova;
