@@ -157,9 +157,17 @@ class Mapa
     /**
      * Avanca somente para um no ligado diretamente ao no atual.
      * O perfil vem da sessao e sua propriedade e validada no banco.
+     *
+     * Se o destino for um ponto de CAPTURA e $aoChegarEmCaptura for informado,
+     * ele roda dentro da mesma transacao do movimento (ex.: sortear o Pokemon).
+     * O que ele devolver volta na chave 'captura' do resultado.
      */
-    public function avancar(int $idPerfil, int $idUsuario, int $idNoDestino): array
-    {
+    public function avancar(
+        int $idPerfil,
+        int $idUsuario,
+        int $idNoDestino,
+        ?callable $aoChegarEmCaptura = null
+    ): array {
         if ($idPerfil <= 0 || $idUsuario <= 0 || $idNoDestino <= 0) {
             throw new DomainException('Dados invalidos para avancar no mapa.');
         }
@@ -280,9 +288,14 @@ class Mapa
                 throw new DomainException('O progresso mudou. Atualize o mapa e tente novamente.');
             }
 
+            $captura = null;
+            if ($destino['tipo_no'] === 'CAPTURA' && $aoChegarEmCaptura !== null) {
+                $captura = $aoChegarEmCaptura($idPerfil);
+            }
+
             $this->pdo->commit();
 
-            return [
+            $retorno = [
                 'sucesso' => true,
                 'mensagem' => 'Progresso salvo!',
                 'no' => [
@@ -291,6 +304,12 @@ class Mapa
                     'tipo_no' => $destino['tipo_no']
                 ]
             ];
+
+            if ($captura !== null) {
+                $retorno['captura'] = $captura;
+            }
+
+            return $retorno;
 
         } catch (\Throwable $erro) {
             if ($this->pdo->inTransaction()) {

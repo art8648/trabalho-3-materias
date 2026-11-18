@@ -67,7 +67,7 @@ $mensagem = htmlspecialchars(
 <body>
     <h1><?= $titulo ?></h1>
     <p><?= $mensagem ?></p>
-    <a href="menu%20inicial/login.html">
+    <a href="login.php">
         Voltar ao cadastro ou login
     </a>
 </body>

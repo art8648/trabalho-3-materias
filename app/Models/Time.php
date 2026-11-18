@@ -9,11 +9,8 @@ use PDO;
 
 class Time
 {
-    // Quantas posicoes o painel TIME mostra.
+    // A equipe normal possui cinco espacos. A posicao 6 fica reservada ao Rayquaza.
     public const POSICOES = 5;
-
-    // O banco aceita posicoes 1 a 6. A 6 so e usada por um instante durante uma troca.
-    private const POSICAO_TEMPORARIA = 6;
 
     private PDO $pdo;
 
@@ -22,20 +19,16 @@ class Time
         $this->pdo = $pdo;
     }
 
-    /**
-     * Devolve as posicoes do time do perfil: [1 => dados ou null, 2 => ..., 5 => ...].
-     * null significa posicao vazia.
-     */
+    /** Retorna as cinco posicoes da equipe; posicoes vazias recebem null. */
     public function listar(int $idPerfil): array
     {
-        $maximo = self::POSICOES;
-
-        $consulta = $this->pdo->prepare("
+        $consulta = $this->pdo->prepare('
             SELECT
                 tp.posicao,
                 pc.id AS id_capturado,
                 pc.hp_atual,
                 pc.desmaiado,
+                pc.status_condicao,
                 p.nome,
                 p.imagem,
                 p.hp AS hp_max,
@@ -46,119 +39,120 @@ class Time
             INNER JOIN pokemon p ON p.id = pc.id_pokemon
             INNER JOIN tipo_pokemon t ON t.id = p.tipo_id
             WHERE tm.id_perfil = :id_perfil
-              AND tp.posicao BETWEEN 1 AND {$maximo}
+              AND tp.posicao BETWEEN 1 AND 5
             ORDER BY tp.posicao ASC
-        ");
+        ');
         $consulta->execute(['id_perfil' => $idPerfil]);
 
         $posicoes = array_fill(1, self::POSICOES, null);
-
-        foreach ($consulta->fetchAll() as $linha) {
+        foreach ($consulta->fetchAll(PDO::FETCH_ASSOC) as $linha) {
             $posicoes[(int) $linha['posicao']] = $linha;
         }
-
         return $posicoes;
     }
 
-    /**
-     * Move o Pokemon da posicao $de para a posicao $para.
-     * Se a posicao de destino estiver vazia, o Pokemon so muda de lugar.
-     * Se estiver ocupada, os dois Pokemon trocam de posicao.
-     */
+    /** Move para uma vaga vazia ou troca dois integrantes sem usar a posicao 6. */
     public function mover(int $idPerfil, int $idUsuario, int $de, int $para): void
     {
         if ($de < 1 || $de > self::POSICOES || $para < 1 || $para > self::POSICOES) {
-            throw new DomainException('Posicao invalida.');
+            throw new DomainException('A equipe normal possui apenas cinco posicoes.');
         }
-
         if ($de === $para) {
             throw new DomainException('Escolha duas posicoes diferentes.');
         }
 
         $this->pdo->beginTransaction();
-
         try {
-            // So mexe no time do perfil que esta na sessao.
-            $consultaTime = $this->pdo->prepare('
-                SELECT tm.id
-                FROM times tm
-                INNER JOIN perfil p ON p.id = tm.id_perfil
-                WHERE tm.id_perfil = :id_perfil
-                  AND p.id_usuario = :id_usuario
-                LIMIT 1
-            ');
-            $consultaTime->execute([
-                'id_perfil' => $idPerfil,
-                'id_usuario' => $idUsuario
-            ]);
-            $idTime = $consultaTime->fetchColumn();
+            $idTime = $this->buscarTimeDoPerfil($idPerfil, $idUsuario, true);
 
-            if ($idTime === false) {
-                throw new DomainException('Time nao encontrado para este perfil.');
-            }
-
-            // Trava as linhas envolvidas para dois cliques nao se misturarem.
-            $consultaPosicoes = $this->pdo->prepare('
-                SELECT id, posicao
+            $consulta = $this->pdo->prepare('
+                SELECT id, id_pokemon, id_pokemon_capturado, posicao
                 FROM time_pokemon
-                WHERE id_time = :id_time
-                  AND posicao IN (:de, :para, :temporaria)
+                WHERE id_time = :id_time AND posicao IN (:de, :para)
                 FOR UPDATE
             ');
-            $consultaPosicoes->execute([
-                'id_time' => (int) $idTime,
-                'de' => $de,
-                'para' => $para,
-                'temporaria' => self::POSICAO_TEMPORARIA
-            ]);
-
-            $ocupadas = [];
-            foreach ($consultaPosicoes->fetchAll() as $linha) {
-                $ocupadas[(int) $linha['posicao']] = (int) $linha['id'];
+            $consulta->execute(['id_time' => $idTime, 'de' => $de, 'para' => $para]);
+            $linhas = [];
+            foreach ($consulta->fetchAll(PDO::FETCH_ASSOC) as $linha) {
+                $linhas[(int) $linha['posicao']] = $linha;
             }
 
-            if (!isset($ocupadas[$de])) {
-                throw new DomainException('Nao ha Pokemon na posicao escolhida.');
+            if (!isset($linhas[$de])) {
+                throw new DomainException('Nao existe Pokemon na posicao de origem.');
             }
 
-            $atualizar = $this->pdo->prepare('
-                UPDATE time_pokemon
-                SET posicao = :posicao
-                WHERE id = :id
-                  AND id_time = :id_time
-            ');
-
-            $definir = function (int $idLinha, int $posicao) use ($atualizar, $idTime): void {
-                $atualizar->execute([
-                    'posicao' => $posicao,
-                    'id' => $idLinha,
-                    'id_time' => (int) $idTime
-                ]);
-            };
-
-            if (!isset($ocupadas[$para])) {
-                // Destino vazio: so muda de lugar.
-                $definir($ocupadas[$de], $para);
+            if (!isset($linhas[$para])) {
+                $mover = $this->pdo->prepare('UPDATE time_pokemon SET posicao = :destino WHERE id = :id AND id_time = :time');
+                $mover->execute(['destino' => $para, 'id' => $linhas[$de]['id'], 'time' => $idTime]);
             } else {
-                // Troca entre dois Pokemon. O banco nao aceita duas linhas na mesma
-                // posicao nem por um instante, entao um deles passa pela posicao 6.
-                if (isset($ocupadas[self::POSICAO_TEMPORARIA])) {
-                    throw new DomainException('Nao foi possivel trocar: a posicao 6 do time esta ocupada.');
-                }
+                // Apaga temporariamente a linha de origem dentro da transacao.
+                // Assim nao precisamos usar a posicao 6, reservada ao Rayquaza.
+                $origem = $linhas[$de];
+                $destino = $linhas[$para];
 
-                $definir($ocupadas[$de], self::POSICAO_TEMPORARIA);
-                $definir($ocupadas[$para], $de);
-                $definir($ocupadas[$de], $para);
+                $apagar = $this->pdo->prepare('DELETE FROM time_pokemon WHERE id = :id AND id_time = :time');
+                $apagar->execute(['id' => $origem['id'], 'time' => $idTime]);
+
+                $atualizarDestino = $this->pdo->prepare('UPDATE time_pokemon SET posicao = :posicao WHERE id = :id AND id_time = :time');
+                $atualizarDestino->execute(['posicao' => $de, 'id' => $destino['id'], 'time' => $idTime]);
+
+                $inserirOrigem = $this->pdo->prepare('
+                    INSERT INTO time_pokemon (id_time, id_pokemon, id_pokemon_capturado, posicao)
+                    VALUES (:time, :pokemon, :capturado, :posicao)
+                ');
+                $inserirOrigem->execute([
+                    'time' => $idTime,
+                    'pokemon' => $origem['id_pokemon'],
+                    'capturado' => $origem['id_pokemon_capturado'],
+                    'posicao' => $para,
+                ]);
             }
 
             $this->pdo->commit();
-
         } catch (\Throwable $erro) {
             if ($this->pdo->inTransaction()) {
                 $this->pdo->rollBack();
             }
-
             throw $erro;
         }
+    }
+
+    /** Primeira vaga livre entre 1 e 5. A posicao 6 nunca e usada por capturas. */
+    public function proximaPosicaoLivre(int $idPerfil): ?int
+    {
+        $consultaTime = $this->pdo->prepare('SELECT id FROM times WHERE id_perfil = :perfil FOR UPDATE');
+        $consultaTime->execute(['perfil' => $idPerfil]);
+        $idTime = $consultaTime->fetchColumn();
+        if ($idTime === false) {
+            throw new DomainException('Time nao encontrado.');
+        }
+
+        $consulta = $this->pdo->prepare('SELECT posicao FROM time_pokemon WHERE id_time = :time AND posicao BETWEEN 1 AND 5');
+        $consulta->execute(['time' => (int) $idTime]);
+        $ocupadas = array_map('intval', $consulta->fetchAll(PDO::FETCH_COLUMN));
+
+        for ($posicao = 1; $posicao <= self::POSICOES; $posicao++) {
+            if (!in_array($posicao, $ocupadas, true)) {
+                return $posicao;
+            }
+        }
+        return null;
+    }
+
+    private function buscarTimeDoPerfil(int $idPerfil, int $idUsuario, bool $bloquear = false): int
+    {
+        $sql = '
+            SELECT tm.id
+            FROM times tm
+            INNER JOIN perfil p ON p.id = tm.id_perfil
+            WHERE tm.id_perfil = :perfil AND p.id_usuario = :usuario
+            LIMIT 1' . ($bloquear ? ' FOR UPDATE' : '');
+        $consulta = $this->pdo->prepare($sql);
+        $consulta->execute(['perfil' => $idPerfil, 'usuario' => $idUsuario]);
+        $id = $consulta->fetchColumn();
+        if ($id === false) {
+            throw new DomainException('Time nao encontrado para este perfil.');
+        }
+        return (int) $id;
     }
 }

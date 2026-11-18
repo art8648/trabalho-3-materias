@@ -658,6 +658,7 @@ BEGIN
             SET MESSAGE_TEXT = 'Evolucao nao cadastrada ou sexo incompativel. Siga a linha oficial e a ordem correta.';
     END IF;
 END//
+DELIMITER ;
 
 DROP TRIGGER IF EXISTS trg_time_pokemon_validar_insert;
 -- NPCs so podem ter especies no time; times de jogador usam capturas do proprio perfil.
@@ -732,6 +733,8 @@ BEGIN
     END IF;
 END//
 DELIMITER ;
+
+DELIMITER //
 -- Valida os lados da batalha e os times vinculados.
 CREATE TRIGGER trg_batalha_validar_insert
 BEFORE INSERT ON batalha
@@ -1126,7 +1129,9 @@ INSERT INTO item (nome, descricao, preco, tipo_efeito, valor_efeito, status_cura
 INSERT INTO personagem (nome, jogavel, secreto, imagem) VALUES
 ('Link', TRUE, FALSE, 'menu inicial/images/link.jpg'),
 ('The Knight', TRUE, FALSE, 'menu inicial/images/knight.jpg'),
-('Mereoleona', TRUE, FALSE, 'menu inicial/images/mereoleona.jpg');
+('Mereoleona', TRUE, FALSE, 'menu inicial/images/mereoleona.jpg'),
+('Hiago', FALSE, FALSE, 'menu inicial/images/hiago.jpg'),
+('Bigolin', FALSE, FALSE, 'menu inicial/images/bigolin.jpg');
 INSERT INTO pokemon (
     api_id, nome, hp, atk, def, sp_atk, sp_def, vel,
     prioridade, tipo_id, nome_ataque, descricao,
@@ -1134,95 +1139,95 @@ INSERT INTO pokemon (
     possui_sexo, capturavel) 
     VALUES
 -- TREECKO
-(252,'Treecko',40,45,35,65,55,70,0,5,'Giga Drain','Lagarto da floresta que escala troncos e paredes com as garras das patas. Mantem a calma mesmo em perigo e usa a cauda para se equilibrar.','ESPECIAL',75,'images/pokemon/treecko.png',TRUE,TRUE),
-(253,'Grovyle',50,65,45,85,65,95,0,5,'Leaf Blade','Pokemon agil que utiliza suas folhas para atacar e se movimenta rapidamente pelas florestas.','FISICO',90,'images/pokemon/grovyle.png',TRUE,TRUE),
-(254,'Sceptile',70,85,65,105,85,120,0,5,'Leaf Storm','Evolucao final de Treecko, extremamente agil e habilidoso em ataques de grama.','ESPECIAL',130,'images/pokemon/sceptile.png',TRUE,TRUE),
+(252,'Treecko',40,45,35,65,55,70,0,5,'Giga Drain','Lagarto da floresta que escala troncos e paredes com as garras das patas. Mantem a calma mesmo em perigo e usa a cauda para se equilibrar.','ESPECIAL',75,'images/pokemon/Treecko.png',TRUE,TRUE),
+(253,'Grovyle',50,65,45,85,65,95,0,5,'Leaf Blade','Pokemon agil que utiliza suas folhas para atacar e se movimenta rapidamente pelas florestas.','FISICO',90,'images/pokemon/Grovyle.png',TRUE,TRUE),
+(254,'Sceptile',70,85,65,105,85,120,0,5,'Leaf Storm','Evolucao final de Treecko, extremamente agil e habilidoso em ataques de grama.','ESPECIAL',130,'images/pokemon/Sceptile.png',TRUE,TRUE),
 
 -- TORCHIC
-(255,'Torchic',45,60,40,70,50,45,0,2,'Fire Punch','Pintinho que guarda uma chama dentro do corpo. E quentinho de abracar, mas cospe bolas de fogo quando se sente ameacado.','FISICO',75,'images/pokemon/torchic.png',TRUE,TRUE),
-(256,'Combusken',60,85,60,85,60,55,0,2,'Blaze Kick','Pokemon de fogo que utiliza suas pernas fortes para executar ataques poderosos.','FISICO',85,'images/pokemon/combusken.png',TRUE,TRUE),
-(257,'Blaziken',80,120,70,110,70,80,0,2,'Flare Blitz','Evolucao final de Torchic, especialista em golpes de fogo e combate fisico.','FISICO',120,'images/pokemon/blaziken.png',TRUE,TRUE),
+(255,'Torchic',45,60,40,70,50,45,0,2,'Fire Punch','Pintinho que guarda uma chama dentro do corpo. E quentinho de abracar, mas cospe bolas de fogo quando se sente ameacado.','FISICO',75,'images/pokemon/Torchic.png',TRUE,TRUE),
+(256,'Combusken',60,85,60,85,60,55,0,2,'Blaze Kick','Pokemon de fogo que utiliza suas pernas fortes para executar ataques poderosos.','FISICO',85,'images/pokemon/Combusken.png',TRUE,TRUE),
+(257,'Blaziken',80,120,70,110,70,80,0,2,'Flare Blitz','Evolucao final de Torchic, especialista em golpes de fogo e combate fisico.','FISICO',120,'images/pokemon/Blaziken.png',TRUE,TRUE),
 
 -- MUDKIP
-(258,'Mudkip',50,70,50,50,50,40,0,3,'Waterfall','Peixe anfibio que vive na lama. A nadadeira da cabeca sente mudancas na agua e no ar, e ele tem forca de sobra para arrastar pedras enormes.','FISICO',80,'images/pokemon/mudkip.png',TRUE,TRUE),
-(259,'Marshtomp',70,85,70,60,70,50,0,3,'Mud Shot','Pokemon que consegue se movimentar com facilidade na lama e na agua.','ESPECIAL',55,'images/pokemon/marshtomp.png',TRUE,TRUE),
-(260,'Swampert',100,110,90,85,90,60,0,3,'Earthquake','Evolucao final de Mudkip, possui grande forca fisica e domina ataques aquaticos.','FISICO',100,'images/pokemon/swampert.png',TRUE,TRUE),
+(258,'Mudkip',50,70,50,50,50,40,0,3,'Waterfall','Peixe anfibio que vive na lama. A nadadeira da cabeca sente mudancas na agua e no ar, e ele tem forca de sobra para arrastar pedras enormes.','FISICO',80,'images/pokemon/Mudkip.png',TRUE,TRUE),
+(259,'Marshtomp',70,85,70,60,70,50,0,3,'Mud Shot','Pokemon que consegue se movimentar com facilidade na lama e na agua.','ESPECIAL',55,'images/pokemon/Marshtomp.png',TRUE,TRUE),
+(260,'Swampert',100,110,90,85,90,60,0,3,'Earthquake','Evolucao final de Mudkip, possui grande forca fisica e domina ataques aquaticos.','FISICO',100,'images/pokemon/Swampert.png',TRUE,TRUE),
 
 -- TAILLOW
-(276,'Taillow',40,55,30,30,30,85,0,10,'Aerial Ace','Andorinha pequena e corajosa. Enfrenta inimigos bem maiores e voa em alta velocidade, mas fica de mau humor quando esta com fome.','FISICO',60,'images/pokemon/taillow.png',TRUE,TRUE),
-(277,'Swellow',60,85,60,50,50,125,0,10,'Aerial Ace','Ave veloz que voa pelos ceus e ataca seus adversarios com grande velocidade.','FISICO',80,'images/pokemon/swellow.png',TRUE,TRUE),
+(276,'Taillow',40,55,30,30,30,85,0,10,'Aerial Ace','Andorinha pequena e corajosa. Enfrenta inimigos bem maiores e voa em alta velocidade, mas fica de mau humor quando esta com fome.','FISICO',60,'images/pokemon/Taillow.png',TRUE,TRUE),
+(277,'Swellow',60,85,60,50,50,125,0,10,'Aerial Ace','Ave veloz que voa pelos ceus e ataca seus adversarios com grande velocidade.','FISICO',80,'images/pokemon/Swellow.png',TRUE,TRUE),
 
 -- WINGULL
-(278,'Wingull',40,30,30,55,30,85,0,3,'Water Pulse','Gaivota que plana sobre o mar aproveitando o vento. Carrega comida no bico e faz o ninho em penhascos a beira da agua.','ESPECIAL',60,'images/pokemon/wingull.png',TRUE,TRUE),
-(279,'Pelipper',60,50,100,95,70,65,0,3,'Water Pulse','Ave aquatico que carrega objetos e alimentos em seu grande bico.','ESPECIAL',90,'images/pokemon/pelipper.png',TRUE,TRUE),
+(278,'Wingull',40,30,30,55,30,85,0,3,'Water Pulse','Gaivota que plana sobre o mar aproveitando o vento. Carrega comida no bico e faz o ninho em penhascos a beira da agua.','ESPECIAL',60,'images/pokemon/Wingull.png',TRUE,TRUE),
+(279,'Pelipper',60,50,100,95,70,65,0,3,'Water Pulse','Ave aquatico que carrega objetos e alimentos em seu grande bico.','ESPECIAL',90,'images/pokemon/Pelipper.png',TRUE,TRUE),
 
 -- RALTS
-(280,'Ralts',28,25,25,45,35,40,0,18,'Draining Kiss','Pokemon pequeno que percebe as emocoes das pessoas. Se sente alegria por perto, fica contente; se sente medo, se esconde.','ESPECIAL',50,'images/pokemon/ralts.png',TRUE,TRUE),
-(281,'Kirlia',38,35,35,65,55,50,0,18,'Confusion','Pokemon que percebe sentimentos e utiliza poderes psiquicos para confundir adversarios.','ESPECIAL',50,'images/pokemon/kirlia.png',TRUE,TRUE),
-(282,'Gardevoir',68,65,65,125,115,80,0,18,'Psychic','Evolucao de Kirlia que utiliza poderes psiquicos para proteger quem considera importante.','ESPECIAL',90,'images/pokemon/gardevoir.png',TRUE,TRUE),
-(475,'Gallade',68,125,65,65,115,80,0,7,'Psycho Cut','Evolucao especial masculina de Kirlia, utiliza seus bracos como laminas.','FISICO',70,'images/pokemon/gallade.png',TRUE,TRUE),
+(280,'Ralts',28,25,25,45,35,40,0,18,'Draining Kiss','Pokemon pequeno que percebe as emocoes das pessoas. Se sente alegria por perto, fica contente; se sente medo, se esconde.','ESPECIAL',50,'images/pokemon/Ralts.png',TRUE,TRUE),
+(281,'Kirlia',38,35,35,65,55,50,0,18,'Confusion','Pokemon que percebe sentimentos e utiliza poderes psiquicos para confundir adversarios.','ESPECIAL',50,'images/pokemon/Kirlia.png',TRUE,TRUE),
+(282,'Gardevoir',68,65,65,125,115,80,0,18,'Psychic','Evolucao de Kirlia que utiliza poderes psiquicos para proteger quem considera importante.','ESPECIAL',90,'images/pokemon/Gardevoir.png',TRUE,TRUE),
+(475,'Gallade',68,125,65,65,115,80,0,7,'Psycho Cut','Evolucao especial masculina de Kirlia, utiliza seus bracos como laminas.','FISICO',70,'images/pokemon/Gallade.png',TRUE,TRUE),
 
 -- ABRA
-(63,'Abra',25,20,15,105,55,90,0,11,'Psybeam','Dorme quase o tempo todo, mas mesmo assim percebe o perigo. Se teletransporta para longe antes que alguem consiga encostar nele.','ESPECIAL',65,'images/pokemon/abra.png',TRUE,TRUE),
-(64,'Kadabra',40,35,30,120,70,105,0,11,'Psybeam','Pokemon psiquico que utiliza uma colher para ampliar seus poderes mentais.','ESPECIAL',65,'images/pokemon/kadabra.png',TRUE,TRUE),
-(65,'Alakazam',55,50,45,135,95,120,0,11,'Psychic','Pokemon extremamente inteligente que utiliza poderosas habilidades psiquicas.','ESPECIAL',90,'images/pokemon/alakazam.png',TRUE,TRUE),
+(63,'Abra',25,20,15,105,55,90,0,11,'Psybeam','Dorme quase o tempo todo, mas mesmo assim percebe o perigo. Se teletransporta para longe antes que alguem consiga encostar nele.','ESPECIAL',65,'images/pokemon/Abra.png',TRUE,TRUE),
+(64,'Kadabra',40,35,30,120,70,105,0,11,'Psybeam','Pokemon psiquico que utiliza uma colher para ampliar seus poderes mentais.','ESPECIAL',65,'images/pokemon/Kadabra.png',TRUE,TRUE),
+(65,'Alakazam',55,50,45,135,95,120,0,11,'Psychic','Pokemon extremamente inteligente que utiliza poderosas habilidades psiquicas.','ESPECIAL',90,'images/pokemon/Alakazam.png',TRUE,TRUE),
 
 -- MAGIKARP
-(129,'Magikarp',20,10,55,15,20,80,0,3,'Flail','Peixe fraco e desajeitado que so sabe se debater. Muita gente o considera o pior Pokemon de todos, mas ele sobrevive em qualquer agua.','FISICO',40,'images/pokemon/magikarp.png',TRUE,TRUE),
-(130,'Gyarados',95,125,79,60,100,81,0,3,'Waterfall','Pokemon aquatico extremamente poderoso, conhecido por sua forca destrutiva.','FISICO',80,'images/pokemon/gyarados.png',TRUE,TRUE),
+(129,'Magikarp',20,10,55,15,20,80,0,3,'Flail','Peixe fraco e desajeitado que so sabe se debater. Muita gente o considera o pior Pokemon de todos, mas ele sobrevive em qualquer agua.','FISICO',40,'images/pokemon/Magikarp.png',TRUE,TRUE),
+(130,'Gyarados',95,125,79,60,100,81,0,3,'Waterfall','Pokemon aquatico extremamente poderoso, conhecido por sua forca destrutiva.','FISICO',80,'images/pokemon/Gyarados.png',TRUE,TRUE),
 
 -- GEODUDE
-(74,'Geodude',40,80,100,30,30,20,0,13,'Rock Slide','Pedra com bracos que se camufla em estradas de montanha. Muita gente tropeca nele sem querer, e ele se irrita com facilidade.','FISICO',75,'images/pokemon/geodude.png',TRUE,TRUE),
-(75,'Graveler',55,95,115,45,45,35,0,13,'Rock Throw','Pokemon rochoso que rola por montanhas e utiliza seu corpo pesado para atacar.','FISICO',50,'images/pokemon/graveler.png',TRUE,TRUE),
-(76,'Golem',80,120,130,55,65,45,0,13,'Stone Edge','Evolucao final de Geodude, possui uma carapaca rochosa extremamente resistente.','FISICO',100,'images/pokemon/golem.png',TRUE,TRUE),
+(74,'Geodude',40,80,100,30,30,20,0,13,'Rock Slide','Pedra com bracos que se camufla em estradas de montanha. Muita gente tropeca nele sem querer, e ele se irrita com facilidade.','FISICO',75,'images/pokemon/Geodude.png',TRUE,TRUE),
+(75,'Graveler',55,95,115,45,45,35,0,13,'Rock Throw','Pokemon rochoso que rola por montanhas e utiliza seu corpo pesado para atacar.','FISICO',50,'images/pokemon/Graveler.png',TRUE,TRUE),
+(76,'Golem',80,120,130,55,65,45,0,13,'Stone Edge','Evolucao final de Geodude, possui uma carapaca rochosa extremamente resistente.','FISICO',100,'images/pokemon/Golem.png',TRUE,TRUE),
 
 -- BELDUM
-(374,'Beldum',40,55,80,35,60,30,0,17,'Metal Claw','Pokemon de ferro que flutua usando magnetismo. Pensa com um cerebro de metal e e bem frio e calculista.','FISICO',50,'images/pokemon/beldum.png',FALSE,TRUE),
-(375,'Metang',60,75,100,55,80,50,0,17,'Bullet Punch','Pokemon metalico formado pela uniao de dois Beldum.','FISICO',40,'images/pokemon/metang.png',FALSE,TRUE),
-(376,'Metagross',80,135,130,95,90,70,0,17,'Meteor Mash','Evolucao final de Beldum, possui grande inteligencia e forca fisica.','FISICO',90,'images/pokemon/metagross.png',FALSE,TRUE),
+(374,'Beldum',40,55,80,35,60,30,0,17,'Metal Claw','Pokemon de ferro que flutua usando magnetismo. Pensa com um cerebro de metal e e bem frio e calculista.','FISICO',50,'images/pokemon/Beldum.png',FALSE,TRUE),
+(375,'Metang',60,75,100,55,80,50,0,17,'Bullet Punch','Pokemon metalico formado pela uniao de dois Beldum.','FISICO',40,'images/pokemon/Metang.png',FALSE,TRUE),
+(376,'Metagross',80,135,130,95,90,70,0,17,'Meteor Mash','Evolucao final de Beldum, possui grande inteligencia e forca fisica.','FISICO',90,'images/pokemon/Metagross.png',FALSE,TRUE),
 
 -- MACHOP
-(66,'Machop',70,80,50,35,35,35,0,7,'Brick Break','Tem musculos de sobra e treina todos os dias. Consegue levantar objetos muito mais pesados do que ele.','FISICO',75,'images/pokemon/machop.png',TRUE,TRUE),
-(67,'Machoke',80,100,70,50,60,45,0,7,'Karate Chop','Pokemon musculoso que utiliza sua forca para derrotar adversarios.','FISICO',50,'images/pokemon/machoke.png',TRUE,TRUE),
-(68,'Machamp',90,130,80,65,85,55,0,7,'Dynamic Punch','Evolucao final de Machop, possui quatro bracos e forca extraordinaria.','FISICO',100,'images/pokemon/machamp.png',TRUE,TRUE),
+(66,'Machop',70,80,50,35,35,35,0,7,'Brick Break','Tem musculos de sobra e treina todos os dias. Consegue levantar objetos muito mais pesados do que ele.','FISICO',75,'images/pokemon/Machop.png',TRUE,TRUE),
+(67,'Machoke',80,100,70,50,60,45,0,7,'Karate Chop','Pokemon musculoso que utiliza sua forca para derrotar adversarios.','FISICO',50,'images/pokemon/Machoke.png',TRUE,TRUE),
+(68,'Machamp',90,130,80,65,85,55,0,7,'Dynamic Punch','Evolucao final de Machop, possui quatro bracos e forca extraordinaria.','FISICO',100,'images/pokemon/Machamp.png',TRUE,TRUE),
 
 -- ELECTRIKE
-(309,'Electrike',40,45,40,65,40,65,0,4,'Thunder Fang','Cachorrinho eletrico que acumula energia no pelo. Corre muito rapido e solta faiscas quando esta animado.','FISICO',65,'images/pokemon/electrike.png',TRUE,TRUE),
-(310,'Manectric',70,75,60,105,60,105,0,4,'Thunder Fang','Pokemon eletrico veloz que acumula energia e libera descargas poderosas.','FISICO',65,'images/pokemon/manectric.png',TRUE,TRUE),
+(309,'Electrike',40,45,40,65,40,65,0,4,'Thunder Fang','Cachorrinho eletrico que acumula energia no pelo. Corre muito rapido e solta faiscas quando esta animado.','FISICO',65,'images/pokemon/Electrike.png',TRUE,TRUE),
+(310,'Manectric',70,75,60,105,60,105,0,4,'Thunder Fang','Pokemon eletrico veloz que acumula energia e libera descargas poderosas.','FISICO',65,'images/pokemon/Manectric.png',TRUE,TRUE),
 
 -- BAGON
-(371,'Bagon',45,75,60,40,30,50,0,15,'Dragon Claw','Sonha em voar um dia e vive batendo a cabeca contra rochas para treinar. Quer evoluir e ganhar asas.','FISICO',80,'images/pokemon/bagon.png',TRUE,TRUE),
-(372,'Shelgon',65,95,100,60,50,50,0,15,'Dragon Claw','Pokemon dragao protegido por uma resistente carapaca.','FISICO',80,'images/pokemon/shelgon.png',TRUE,TRUE),
-(373,'Salamence',95,135,80,110,80,100,0,15,'Dragon Rush','Evolucao final de Bagon, finalmente conquista suas asas e domina os ceus.','FISICO',100,'images/pokemon/salamence.png',TRUE,TRUE),
+(371,'Bagon',45,75,60,40,30,50,0,15,'Dragon Claw','Sonha em voar um dia e vive batendo a cabeca contra rochas para treinar. Quer evoluir e ganhar asas.','FISICO',80,'images/pokemon/Bagon.png',TRUE,TRUE),
+(372,'Shelgon',65,95,100,60,50,50,0,15,'Dragon Claw','Pokemon dragao protegido por uma resistente carapaca.','FISICO',80,'images/pokemon/Shelgon.png',TRUE,TRUE),
+(373,'Salamence',95,135,80,110,80,100,0,15,'Dragon Rush','Evolucao final de Bagon, finalmente conquista suas asas e domina os ceus.','FISICO',100,'images/pokemon/Salamence.png',TRUE,TRUE),
 
 -- SNORUNT
-(361,'Snorunt',50,50,50,50,50,50,0,6,'Icy Wind','Pokemon do gelo que vive em lugares frios e escuros. Dizem que traz sorte para as casas onde se instala.','ESPECIAL',55,'images/pokemon/snorunt.png',TRUE,TRUE),
-(362,'Glalie',80,80,80,80,80,80,0,6,'Ice Beam','Pokemon de gelo que congela seus adversarios utilizando ar extremamente frio.','ESPECIAL',90,'images/pokemon/glalie.png',TRUE,TRUE),
-(478,'Froslass',70,80,70,80,70,110,0,6,'Blizzard','Evolucao especial feminina de Snorunt, utiliza ataques congelantes.','ESPECIAL',110,'images/pokemon/froslass.png',TRUE,TRUE),
+(361,'Snorunt',50,50,50,50,50,50,0,6,'Icy Wind','Pokemon do gelo que vive em lugares frios e escuros. Dizem que traz sorte para as casas onde se instala.','ESPECIAL',55,'images/pokemon/Snorunt.png',TRUE,TRUE),
+(362,'Glalie',80,80,80,80,80,80,0,6,'Ice Beam','Pokemon de gelo que congela seus adversarios utilizando ar extremamente frio.','ESPECIAL',90,'images/pokemon/Glalie.png',TRUE,TRUE),
+(478,'Froslass',70,80,70,80,70,110,0,6,'Blizzard','Evolucao especial feminina de Snorunt, utiliza ataques congelantes.','ESPECIAL',110,'images/pokemon/Froslass.png',TRUE,TRUE),
 
 -- GULPIN
-(316,'Gulpin',70,43,53,43,53,40,0,8,'Sludge','Praticamente um estomago ambulante. Engole tudo o que encontra, e o suco do seu estomago dissolve quase qualquer coisa.','ESPECIAL',65,'images/pokemon/gulpin.png',TRUE,TRUE),
-(317,'Swalot',100,73,83,73,83,55,0,8,'Sludge Bomb','Pokemon venenoso capaz de engolir objetos enormes e liberar substancias toxicas.','ESPECIAL',90,'images/pokemon/swalot.png',TRUE,TRUE),
+(316,'Gulpin',70,43,53,43,53,40,0,8,'Sludge','Praticamente um estomago ambulante. Engole tudo o que encontra, e o suco do seu estomago dissolve quase qualquer coisa.','ESPECIAL',65,'images/pokemon/Gulpin.png',TRUE,TRUE),
+(317,'Swalot',100,73,83,73,83,55,0,8,'Sludge Bomb','Pokemon venenoso capaz de engolir objetos enormes e liberar substancias toxicas.','ESPECIAL',90,'images/pokemon/Swalot.png',TRUE,TRUE),
 
 -- RHYHORN
-(111,'Rhyhorn',80,85,95,30,30,25,0,9,'Bulldoze','Rinoceronte de pedra que corre sempre em linha reta sem pensar. Derruba predios na corrida, mas esquece rapido o que estava fazendo.','FISICO',60,'images/pokemon/rhyhorn.png',TRUE,TRUE),
-(112,'Rhydon',105,130,120,45,45,40,0,9,'Drill Run','Pokemon resistente que utiliza seu chifre e sua armadura para atacar.','FISICO',80,'images/pokemon/rhydon.png',TRUE,TRUE),
-(464,'Rhyperior',115,140,130,55,55,40,0,9,'Rock Wrecker','Evolucao final de Rhyhorn, possui armadura rochosa extremamente resistente.','FISICO',150,'images/pokemon/rhyperior.png',TRUE,TRUE),
+(111,'Rhyhorn',80,85,95,30,30,25,0,9,'Bulldoze','Rinoceronte de pedra que corre sempre em linha reta sem pensar. Derruba predios na corrida, mas esquece rapido o que estava fazendo.','FISICO',60,'images/pokemon/Rhyhorn.png',TRUE,TRUE),
+(112,'Rhydon',105,130,120,45,45,40,0,9,'Drill Run','Pokemon resistente que utiliza seu chifre e sua armadura para atacar.','FISICO',80,'images/pokemon/Rhydon.png',TRUE,TRUE),
+(464,'Rhyperior',115,140,130,55,55,40,0,9,'Rock Wrecker','Evolucao final de Rhyhorn, possui armadura rochosa extremamente resistente.','FISICO',150,'images/pokemon/Rhyperior.png',TRUE,TRUE),
 
 -- JIGGLYPUFF
-(39,'Jigglypuff',115,45,20,45,25,20,0,1,'Hyper Voice','Canta uma melodia que faz todo mundo dormir. Fica furioso quando alguem pega no sono antes de a musica acabar.','ESPECIAL',90,'images/pokemon/jigglypuff.png',TRUE,TRUE),
-(40,'Wigglytuff',140,70,45,85,50,45,0,1,'Hyper Voice','Pokemon de corpo macio e voz poderosa, capaz de cantar melodias hipnotizantes.','ESPECIAL',90,'images/pokemon/wigglytuff.png',TRUE,TRUE),
+(39,'Jigglypuff',115,45,20,45,25,20,0,1,'Hyper Voice','Canta uma melodia que faz todo mundo dormir. Fica furioso quando alguem pega no sono antes de a musica acabar.','ESPECIAL',90,'images/pokemon/Jigglypuff.png',TRUE,TRUE),
+(40,'Wigglytuff',140,70,45,85,50,45,0,1,'Hyper Voice','Pokemon de corpo macio e voz poderosa, capaz de cantar melodias hipnotizantes.','ESPECIAL',90,'images/pokemon/Wigglytuff.png',TRUE,TRUE),
 
 -- SHUPPET
-(353,'Shuppet',44,75,35,63,33,45,0,14,'Shadow Ball','Se alimenta de sentimentos negativos, como inveja e rancor. Costuma se esconder em lugares escuros.','ESPECIAL',80,'images/pokemon/shuppet.png',TRUE,TRUE),
-(354,'Banette',64,115,65,83,63,65,0,14,'Shadow Claw','Pokemon fantasma que guarda ressentimentos e utiliza ataques sombrios.','FISICO',70,'images/pokemon/banette.png',TRUE,TRUE),
+(353,'Shuppet',44,75,35,63,33,45,0,14,'Shadow Ball','Se alimenta de sentimentos negativos, como inveja e rancor. Costuma se esconder em lugares escuros.','ESPECIAL',80,'images/pokemon/Shuppet.png',TRUE,TRUE),
+(354,'Banette',64,115,65,83,63,65,0,14,'Shadow Claw','Pokemon fantasma que guarda ressentimentos e utiliza ataques sombrios.','FISICO',70,'images/pokemon/Banette.png',TRUE,TRUE),
 
 -- ESPECIES SEM EVOLUCAO
-(359,'Absol',65,130,60,75,60,75,0,16,'Night Slash','Aparece em lugares onde um desastre vai acontecer, por isso e chamado de mensageiro do azar. Na verdade, so quer avisar as pessoas.','FISICO',70,'images/pokemon/absol.png',TRUE,TRUE),
-(214,'Heracross',80,125,75,40,95,85,0,12,'X-Scissor','Besouro forte que adora seiva de arvore. Usa o chifre para arremessar oponentes bem longe.','FISICO',80,'images/pokemon/heracross.png',TRUE,TRUE),
-(NULL,'Arnaldo',120,120,120,120,120,120,0,20,'Golpe Supremo','O deus do universo. O criador de tudo e a coisa mais forte que existe na Terra.','ESPECIAL',100,'images/pokemon/arnaldo.png',TRUE,TRUE),
-(384,'Rayquaza',105,150,90,150,90,95,0,15,'Dragon Ascent','Dragao lendario que vive no ceu, acima das nuvens e quase nunca e visto.','FISICO',120,'images/pokemon/rayquaza.png',FALSE,FALSE),
-(386,'Deoxys',50,150,50,150,50,150,0,19,'Psycho Boost','Virus vindo do espaco que sofreu mutacao ao ser atingido por um raio. Inteligente e perigoso, nao pertence a este planeta.','ESPECIAL',140,'images/pokemon/deoxys.png',FALSE,FALSE);
+(359,'Absol',65,130,60,75,60,75,0,16,'Night Slash','Aparece em lugares onde um desastre vai acontecer, por isso e chamado de mensageiro do azar. Na verdade, so quer avisar as pessoas.','FISICO',70,'images/pokemon/Absol.png',TRUE,TRUE),
+(214,'Heracross',80,125,75,40,95,85,0,12,'X-Scissor','Besouro forte que adora seiva de arvore. Usa o chifre para arremessar oponentes bem longe.','FISICO',80,'images/pokemon/Heracross.png',TRUE,TRUE),
+(NULL,'Arnaldo',120,120,120,120,120,120,0,20,'Golpe Supremo','O deus do universo. O criador de tudo e a coisa mais forte que existe na Terra.','ESPECIAL',100,'images/pokemon/Armaldo.png',TRUE,TRUE),
+(384,'Rayquaza',105,150,90,150,90,95,0,15,'Dragon Ascent','Dragao lendario que vive no ceu, acima das nuvens e quase nunca e visto.','FISICO',120,'images/pokemon/Rayquazacutsinesla.png',FALSE,FALSE),
+(386,'Deoxys',50,150,50,150,50,150,0,19,'Psycho Boost','Virus vindo do espaco que sofreu mutacao ao ser atingido por um raio. Inteligente e perigoso, nao pertence a este planeta.','ESPECIAL',140,'images/pokemon/Deoxys.png',FALSE,FALSE);
 
 INSERT IGNORE INTO evolution_rules (
     id_pokemon_origem,
@@ -1273,3 +1278,263 @@ INNER JOIN pokemon AS destino
     ON destino.nome = regras.destino
 INNER JOIN item
     ON item.nome = 'Pedra Universal';
+
+-- 1) O chefe precisa existir como adversario (jogavel = FALSE).
+--    Se ja existir um personagem 'Bigolin', nada e inserido.
+INSERT INTO personagem (nome, jogavel, secreto, imagem)
+SELECT 'Bigolin', FALSE, FALSE, 'menu inicial/images/bigolin.jpg'
+FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM personagem WHERE nome = 'Bigolin');
+
+SET @id_chefe = (SELECT id FROM personagem WHERE nome = 'Bigolin' LIMIT 1);
+
+-- 2) A area (a recompensa tem que ser a Pedra Universal, regra do trigger).
+INSERT INTO area_jogo (nome, ordem, id_personagem_chefe, id_item_recompensa)
+VALUES (
+    'PEAKMON: THE BIGOLIN CRISIS',
+    1,
+    @id_chefe,
+    (SELECT id FROM item WHERE nome = 'Pedra Universal' LIMIT 1)
+);
+
+SET @id_area = LAST_INSERT_ID();
+
+-- 3) Os pontos. pos_x / pos_y sao porcentagens (0 a 100) dentro do mapa.
+--    GRAMA_*     = BATALHA contra Pokemon selvagem (icone do mato)
+--    TREINADOR_* = BATALHA contra treinador (o PHP troca o icone pelo codigo)
+INSERT INTO area_no (id_area, codigo, tipo_no, titulo, descricao, pos_x, pos_y, id_personagem) VALUES
+-- topo
+(@id_area, 'INICIO',          'INICIO',  'Entrada da rota',   'Aqui comeca a sua jornada.',               50,  5, NULL),
+-- linha 1
+(@id_area, 'CAPTURA_1',       'CAPTURA', 'Pokebola',          'Chance de capturar um Pokemon.',           27, 16, NULL),
+(@id_area, 'GRAMA_1',         'BATALHA', 'Mato alto',         'Um Pokemon selvagem apareceu!',            73, 16, NULL),
+-- linha 2
+(@id_area, 'GRAMA_2',         'BATALHA', 'Mato alto',         'Um Pokemon selvagem apareceu!',            18, 28, NULL),
+(@id_area, 'TREINADOR_1',     'BATALHA', 'Treinador',         'Um treinador quer batalhar.',              50, 28, NULL),
+(@id_area, 'GRAMA_3',         'BATALHA', 'Mato alto',         'Um Pokemon selvagem apareceu!',            82, 28, NULL),
+-- linha 3
+(@id_area, 'CAPTURA_2',       'CAPTURA', 'Pokebola',          'Chance de capturar um Pokemon.',           13, 40, NULL),
+(@id_area, 'GRAMA_4',         'BATALHA', 'Mato alto',         'Um Pokemon selvagem apareceu!',            38, 40, NULL),
+(@id_area, 'TREINADOR_2',     'BATALHA', 'Treinador',         'Um treinador quer batalhar.',              62, 40, NULL),
+(@id_area, 'CAPTURA_3',       'CAPTURA', 'Pokebola',          'Chance de capturar um Pokemon.',           87, 40, NULL),
+-- linha 4
+(@id_area, 'GRAMA_5',         'BATALHA', 'Mato alto',         'Um Pokemon selvagem apareceu!',            18, 52, NULL),
+(@id_area, 'TREINADOR_3',     'BATALHA', 'Treinador',         'Um treinador quer batalhar.',              50, 52, NULL),
+(@id_area, 'TREINADOR_4',     'BATALHA', 'Treinador',         'Um treinador quer batalhar.',              82, 52, NULL),
+-- linha 5
+(@id_area, 'ITEM_1',          'ITEM',    'Item escondido',    'Voce achou algo no chao.',                 13, 64, NULL),
+(@id_area, 'GRAMA_6',         'BATALHA', 'Mato alto',         'Um Pokemon selvagem apareceu!',            38, 64, NULL),
+(@id_area, 'CAPTURA_4',       'CAPTURA', 'Pokebola',          'Chance de capturar um Pokemon.',           62, 64, NULL),
+(@id_area, 'CAPTURA_5',       'CAPTURA', 'Pokebola',          'Chance de capturar um Pokemon.',           87, 64, NULL),
+-- linha 6 (no lugar do "?" e do CD da imagem: evento e loja)
+(@id_area, 'EVENTO_1',        'EVENTO',  'Sinal estranho',    'Algo diferente acontece por aqui...',      18, 76, NULL),
+(@id_area, 'ITEM_2',          'ITEM',    'Item escondido',    'Voce achou algo no chao.',                 50, 76, NULL),
+(@id_area, 'LOJA_1',          'LOJA',    'Loja da rota',      'Compre itens com seus Pokedollars.',       82, 76, NULL),
+-- linha 7: as duas casas anteriores ao chefe (uma delas e o Centro Pokemon)
+(@id_area, 'ITEM_3',          'ITEM',    'Item escondido',    'Voce achou algo no chao.',                 27, 87, NULL),
+(@id_area, 'CENTRO_POKEMON',  'CURA',    'Centro Pokemon',    'Cure seu time antes de enfrentar o chefe.',73, 87, NULL),
+-- chefe, na casa de baixo
+(@id_area, 'CHEFE_1',         'CHEFE',   'Bigolin',           'O chefe da area. Boa sorte!',              50, 96, @id_chefe);
+
+-- 4) Os caminhos (sentido: de cima para baixo).
+INSERT INTO area_conexao (id_area, id_no_origem, id_no_destino)
+SELECT @id_area, o.id, d.id
+FROM (
+    SELECT 'INICIO' AS de, 'CAPTURA_1' AS para
+    UNION ALL SELECT 'INICIO', 'GRAMA_1'
+    UNION ALL SELECT 'CAPTURA_1', 'GRAMA_2'
+    UNION ALL SELECT 'CAPTURA_1', 'TREINADOR_1'
+    UNION ALL SELECT 'GRAMA_1', 'TREINADOR_1'
+    UNION ALL SELECT 'GRAMA_1', 'GRAMA_3'
+    UNION ALL SELECT 'GRAMA_2', 'CAPTURA_2'
+    UNION ALL SELECT 'GRAMA_2', 'GRAMA_4'
+    UNION ALL SELECT 'TREINADOR_1', 'GRAMA_4'
+    UNION ALL SELECT 'TREINADOR_1', 'TREINADOR_2'
+    UNION ALL SELECT 'GRAMA_3', 'TREINADOR_2'
+    UNION ALL SELECT 'GRAMA_3', 'CAPTURA_3'
+    UNION ALL SELECT 'CAPTURA_2', 'GRAMA_5'
+    UNION ALL SELECT 'GRAMA_4', 'GRAMA_5'
+    UNION ALL SELECT 'GRAMA_4', 'TREINADOR_3'
+    UNION ALL SELECT 'TREINADOR_2', 'TREINADOR_3'
+    UNION ALL SELECT 'TREINADOR_2', 'TREINADOR_4'
+    UNION ALL SELECT 'CAPTURA_3', 'TREINADOR_4'
+    UNION ALL SELECT 'GRAMA_5', 'ITEM_1'
+    UNION ALL SELECT 'GRAMA_5', 'GRAMA_6'
+    UNION ALL SELECT 'TREINADOR_3', 'GRAMA_6'
+    UNION ALL SELECT 'TREINADOR_3', 'CAPTURA_4'
+    UNION ALL SELECT 'TREINADOR_4', 'CAPTURA_4'
+    UNION ALL SELECT 'TREINADOR_4', 'CAPTURA_5'
+    UNION ALL SELECT 'ITEM_1', 'EVENTO_1'
+    UNION ALL SELECT 'GRAMA_6', 'EVENTO_1'
+    UNION ALL SELECT 'GRAMA_6', 'ITEM_2'
+    UNION ALL SELECT 'CAPTURA_4', 'ITEM_2'
+    UNION ALL SELECT 'CAPTURA_4', 'LOJA_1'
+    UNION ALL SELECT 'CAPTURA_5', 'LOJA_1'
+    UNION ALL SELECT 'EVENTO_1', 'ITEM_3'
+    UNION ALL SELECT 'ITEM_2', 'ITEM_3'
+    UNION ALL SELECT 'ITEM_2', 'CENTRO_POKEMON'
+    UNION ALL SELECT 'LOJA_1', 'CENTRO_POKEMON'
+    UNION ALL SELECT 'ITEM_3', 'CHEFE_1'
+    UNION ALL SELECT 'CENTRO_POKEMON', 'CHEFE_1'
+) AS c
+JOIN area_no o ON o.id_area = @id_area AND o.codigo = c.de COLLATE utf8mb4_unicode_ci
+JOIN area_no d ON d.id_area = @id_area AND d.codigo = c.para COLLATE utf8mb4_unicode_ci;
+
+START TRANSACTION;
+
+-- Troca o chefe oficial da área para Hiago
+UPDATE area_jogo
+SET id_personagem_chefe = (
+    SELECT id FROM personagem WHERE nome = 'Hiago'
+)
+WHERE id = 1;
+
+-- Troca o personagem e o título do ponto final
+UPDATE area_no
+SET
+    id_personagem = (
+        SELECT id FROM personagem WHERE nome = 'Hiago'
+    ),
+    titulo = 'Hiago',
+    descricao = 'O chefe da area. Boa sorte!'
+WHERE id_area = 1
+AND tipo_no = 'CHEFE';
+
+COMMIT;
+
+USE peakmon_bigolin_crisis;
+
+-- CADASTRO DA AREA 2
+
+START TRANSACTION;
+
+-- 1. Define os registros de origem e o chefe
+SET @id_area_origem = 1;
+
+SET @id_bigolin = (
+    SELECT id
+    FROM personagem
+    WHERE nome = 'Bigolin'
+      AND jogavel = FALSE
+    LIMIT 1
+);
+
+SET @id_pedra = (
+    SELECT id
+    FROM item
+    WHERE nome = 'Pedra Universal'
+    LIMIT 1
+);
+
+-- 2. Cria a nova area
+INSERT INTO area_jogo (
+    nome,
+    ordem,
+    id_personagem_chefe,
+    id_item_recompensa
+)
+VALUES (
+    'PEAKMON: THE BIGOLIN CRISIS - AREA 2',
+    2,
+    @id_bigolin,
+    @id_pedra
+);
+
+SET @id_area_nova = LAST_INSERT_ID();
+
+-- 3. Copia os 23 pontos da Area 1
+--    Cada ponto recebe novas coordenadas.
+--    Inicio e chefe continuam nas extremidades.
+
+INSERT INTO area_no (
+    id_area,
+    codigo,
+    tipo_no,
+    titulo,
+    descricao,
+    pos_x,
+    pos_y,
+    id_personagem
+)
+SELECT
+    @id_area_nova,
+    codigo,
+    tipo_no,
+
+    CASE
+        WHEN tipo_no = 'CHEFE' THEN 'Bigolin'
+        ELSE titulo
+    END,
+
+    CASE
+        WHEN tipo_no = 'CHEFE' THEN 'O chefe final da area. Boa sorte!'
+        ELSE descricao
+    END,
+
+    GREATEST(8, LEAST(92,
+        pos_x + FLOOR(RAND() * 17) - 8
+    )),
+
+    CASE
+        WHEN tipo_no = 'INICIO' THEN 5
+        WHEN tipo_no = 'CHEFE' THEN 96
+        ELSE GREATEST(12, LEAST(89,
+            pos_y + FLOOR(RAND() * 7) - 3
+        ))
+    END,
+
+    CASE
+        WHEN tipo_no = 'CHEFE' THEN @id_bigolin
+        ELSE NULL
+    END
+
+FROM area_no
+WHERE id_area = @id_area_origem;
+
+-- 4. Copia as conexoes usando os codigos dos pontos
+--    Assim, as conexoes apontam para os novos IDs.
+
+INSERT INTO area_conexao (
+    id_area,
+    id_no_origem,
+    id_no_destino
+)
+SELECT
+    @id_area_nova,
+    novo_origem.id,
+    novo_destino.id
+FROM area_conexao conexao
+JOIN area_no origem
+    ON origem.id = conexao.id_no_origem
+JOIN area_no destino
+    ON destino.id = conexao.id_no_destino
+JOIN area_no novo_origem
+    ON novo_origem.id_area = @id_area_nova
+   AND novo_origem.codigo = origem.codigo
+JOIN area_no novo_destino
+    ON novo_destino.id_area = @id_area_nova
+   AND novo_destino.codigo = destino.codigo
+WHERE conexao.id_area = @id_area_origem;
+
+COMMIT;
+
+-- 5. Conferencia
+SELECT
+    a.id,
+    a.nome AS area,
+    a.ordem,
+    p.nome AS chefe
+FROM area_jogo a
+JOIN personagem p
+    ON p.id = a.id_personagem_chefe
+WHERE a.id = @id_area_nova;
+
+SELECT
+    COUNT(*) AS total_pontos
+FROM area_no
+WHERE id_area = @id_area_nova;
+
+SELECT
+    COUNT(*) AS total_conexoes
+FROM area_conexao
+WHERE id_area = @id_area_nova;
