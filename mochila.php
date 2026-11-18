@@ -135,16 +135,7 @@ $imagemPokemon = static function (array $pokemon) use ($h): string {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Mochila | Peakmon</title>
-<style>
-:root{--ink:#24332c;--deep:#203d31;--green:#477b55;--mint:#dcebd2;--paper:#f5edda;--paper2:#e8ddc3;--gold:#d8b96f;--line:#35483c;--muted:#748174;--red:#a94e43;--shadow:#1c2b24}
-*{box-sizing:border-box}body{margin:0;min-height:100vh;color:var(--ink);font-family:ui-monospace,Consolas,monospace;background:radial-gradient(ellipse at 50% 0,#a9d6a0 0,#6d9c70 48%,#365b48 100%);padding:24px 16px 48px}
-button,select,input{font:inherit}button{cursor:pointer}.shell{width:min(1180px,100%);margin:auto}.topbar{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:18px;flex-wrap:wrap}.brand{display:flex;align-items:center;gap:12px;color:#f8f2df;text-shadow:2px 2px #294433}.brand-mark{width:48px;height:48px;display:grid;place-items:center;background:#f4e9ca;border:3px solid var(--line);box-shadow:4px 4px var(--shadow);font-size:25px}.brand small{display:block;font-size:10px;letter-spacing:2px;color:#e4edcf}.brand h1{font-size:clamp(18px,3vw,27px);margin:2px 0}.back{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;background:var(--paper);border:3px solid var(--line);box-shadow:3px 3px var(--shadow);color:var(--ink);text-decoration:none;font-weight:900}.back:hover{background:#fff6df;transform:translateY(-1px)}
-.frame{background:var(--paper);border:4px solid var(--line);box-shadow:7px 7px var(--shadow);padding:clamp(12px,2.5vw,24px)}.frame-head{display:flex;justify-content:space-between;align-items:flex-end;gap:10px;border-bottom:3px solid var(--line);padding-bottom:12px;margin-bottom:16px}.eyebrow{font-size:10px;letter-spacing:2px;color:var(--green);font-weight:900}.frame-head h2{margin:4px 0 0;font-size:clamp(20px,3vw,29px)}.save-tag{background:var(--mint);border:2px solid var(--line);padding:7px 10px;font-size:10px;font-weight:900;white-space:nowrap}
-.tabs{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px}.tab{border:2px solid var(--line);background:var(--paper2);padding:9px 13px;font-size:11px;font-weight:900;color:var(--ink)}.tab.active,.tab:hover{background:var(--green);color:#fff}.inventory-layout{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(260px,.85fr);gap:14px}.panel{border:3px solid var(--line);background:#fff9e9;min-width:0}.panel-title{margin:0;padding:10px 12px;background:var(--deep);color:#fff4d8;font-size:12px;letter-spacing:1px;border-bottom:3px solid var(--line);display:flex;justify-content:space-between;align-items:center}.panel-body{padding:12px}.search{width:100%;padding:10px;border:2px solid #899783;background:#fffdf5;margin-bottom:10px;color:var(--ink);outline:none}.item-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(135px,1fr));gap:8px;max-height:440px;overflow:auto;padding:2px}.item-card{position:relative;text-align:left;border:2px solid #9a9b7e;background:#f5edda;padding:10px;min-height:104px;color:var(--ink);display:flex;flex-direction:column;gap:5px}.item-card:hover,.item-card.selected{border:3px solid var(--green);background:#e7f0d9;padding:9px}.item-icon{font-size:25px}.item-name{font-weight:900;font-size:12px;line-height:1.3}.item-desc{font-size:10px;color:#657266;line-height:1.4}.qty{position:absolute;right:7px;top:7px;background:var(--deep);color:white;padding:4px 6px;font-size:10px;font-weight:900}.kind{font-size:9px;color:#53745a;text-transform:uppercase;font-weight:900;letter-spacing:1px}.empty{padding:24px 12px;text-align:center;color:var(--muted);font-size:12px;line-height:1.7}
-.detail{min-height:300px;display:flex;flex-direction:column}.detail-inner{padding:16px;display:flex;flex-direction:column;gap:12px;flex:1}.detail-icon{width:72px;height:72px;display:grid;place-items:center;font-size:38px;background:#e5edda;border:3px solid #91a184}.detail h3{margin:0;font-size:20px}.detail-desc{font-size:12px;line-height:1.65;color:#5e6b60;margin:0}.detail-meta{display:flex;gap:8px;flex-wrap:wrap}.meta-chip{background:#e6e2cc;border:1px solid #a5a58a;padding:5px 8px;font-size:10px;font-weight:900}.field-label{font-size:10px;font-weight:900;letter-spacing:1px;color:#526c56;margin-bottom:5px;display:block}.field{width:100%;padding:10px;border:2px solid #8d9b83;background:#fffdf5;color:var(--ink)}.primary{border:3px solid var(--line);background:var(--green);color:white;padding:11px 14px;font-weight:900;box-shadow:3px 3px #b7b08f}.primary:hover{background:#315f42}.primary:disabled{opacity:.45;cursor:not-allowed}.secondary{border:2px solid var(--line);background:#e8ddc3;color:var(--ink);padding:8px 10px;font-size:10px;font-weight:900}.secondary:hover{background:#d8e8cc}.danger{border:2px solid #743b35;background:#f0d8cb;color:#743b35;padding:8px 10px;font-size:10px;font-weight:900}.hidden{display:none!important}
-.lower{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px}.team-list{display:grid;gap:7px}.pokemon-row{display:flex;align-items:center;gap:10px;padding:8px;background:#f7f0df;border:2px solid #c2b99e;min-width:0}.pokemon-sprite{width:58px;height:58px;object-fit:contain;image-rendering:pixelated;flex:none}.pokemon-info{min-width:0;flex:1}.pokemon-info strong{display:block;font-size:12px}.pokemon-info small{display:block;font-size:10px;color:#657266;margin-top:4px;line-height:1.5}.slot-number{width:25px;height:25px;display:grid;place-items:center;background:var(--deep);color:white;font-size:11px;font-weight:900;flex:none}.slot-empty{padding:13px;border:2px dashed #a9ad91;color:#89917f;font-size:11px;text-align:center}.hp-track{height:6px;background:#d8d7c3;margin-top:6px;overflow:hidden}.hp-fill{height:100%;background:#6caa62}.reserve-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:7px}.reserve-card{border:2px solid #c2b99e;background:#f7f0df;padding:8px;display:flex;gap:8px;align-items:center;min-width:0}.reserve-card .pokemon-sprite{width:48px;height:48px}.reserve-actions{display:flex;gap:5px;align-items:center;flex-wrap:wrap}.reserve-actions select{max-width:66px;padding:5px;border:1px solid #899783;background:#fffdf5;font-size:10px}.reserve-card .secondary{padding:6px;font-size:9px}.status{font-size:9px;font-weight:900;color:var(--red)}.toast{position:fixed;right:18px;bottom:18px;max-width:min(420px,calc(100% - 36px));padding:13px 16px;background:#203d31;color:white;border:3px solid #f4e9ca;box-shadow:4px 4px #1c2b24;font-size:12px;z-index:10}.toast.error{background:#8e3d35}.hint{font-size:10px;color:#6b776b;line-height:1.6;margin:10px 0 0}.error-box{padding:14px;background:#f2d8cc;border:2px solid #9b5045;color:#783b33;font-size:12px;margin-bottom:12px}
-@media(max-width:800px){.inventory-layout,.lower{grid-template-columns:1fr}.detail{min-height:unset}.item-grid{max-height:320px}}@media(max-width:480px){body{padding:12px 8px 32px}.frame{padding:10px}.frame-head{align-items:flex-start;flex-direction:column}.save-tag{white-space:normal}.item-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.pokemon-row{gap:6px}.pokemon-sprite{width:46px;height:46px}.pokemon-row .secondary{padding:6px;font-size:9px}}
-</style>
+<link rel="stylesheet" href="mochila.css">
 </head>
 <body>
 <div class="shell">
@@ -255,11 +246,27 @@ button,select,input{font:inherit}button{cursor:pointer}.shell{width:min(1180px,1
 <div class="toast hidden" id="toast" role="status"></div>
 <script>
 (() => {
+    const chaveScrollMochila = 'peakmon_mochila_scroll';
+    const scrollSalvo = sessionStorage.getItem(chaveScrollMochila);
+    if (scrollSalvo !== null) {
+        sessionStorage.removeItem(chaveScrollMochila);
+        window.addEventListener('load', () => window.scrollTo(0, Number(scrollSalvo) || 0), {once:true});
+    }
+    const recarregarPreservandoScroll = () => {
+        sessionStorage.setItem(chaveScrollMochila, String(window.scrollY));
+        window.location.reload();
+    };
     const csrf = <?= json_encode($csrf, JSON_UNESCAPED_UNICODE) ?>;
     const form = async (acao, dados = {}) => {
         const body = new URLSearchParams({acao, csrf, ...dados});
         const resposta = await fetch('mochila.php', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body});
-        const resultado = await resposta.json();
+        const texto = await resposta.text();
+        let resultado;
+        try { resultado = JSON.parse(texto); }
+        catch (erroJson) {
+            console.error('Resposta inesperada do servidor:', texto);
+            throw new Error('O servidor retornou uma resposta invalida. Confira o log do PHP.');
+        }
         if (!resposta.ok || !resultado.sucesso) throw new Error(resultado.mensagem || 'Nao foi possivel concluir a acao.');
         return resultado;
     };
@@ -317,7 +324,7 @@ button,select,input{font:inherit}button{cursor:pointer}.shell{width:min(1180px,1
         const alvo = document.getElementById('pokemon-alvo').value;
         if (!itemSelecionado || !alvo) return toast('Selecione um Pokemon primeiro.', true);
         botaoUsar.disabled = true;
-        try { const r = await form('usar_item', {id_item:itemSelecionado.id, id_capturado:alvo}); toast(r.mensagem); setTimeout(() => location.reload(), 850); }
+        try { const r = await form('usar_item', {id_item:itemSelecionado.id, id_capturado:alvo}); toast(r.mensagem); setTimeout(recarregarPreservandoScroll, 850); }
         catch (e) { toast(e.message, true); botaoUsar.disabled = false; }
     });
 

@@ -156,7 +156,7 @@ h1 {
 }
 
 .perfil {
-    width: 240px;
+    width: 400px;
     padding: 28px 20px 24px;
 
     display: flex;
@@ -190,17 +190,26 @@ h1 {
 }
 
 .avatar {
-    width: 92px;
-    height: 92px;
+    width: 130px;
+    height: 130px;
 
     display: grid;
     place-items: center;
 
-    font-size: 48px;
+    overflow: hidden;
 
     background: rgba(0, 0, 0, .28);
     border: 3px solid #8de0a5;
     border-radius: 50%;
+}
+.avatar img {
+    width: 100%;
+    height: 100%;
+
+    object-fit: cover;
+    border-radius: 50%;
+
+    display: block;
 }
 
 .perfil h2 {
@@ -270,7 +279,7 @@ h1 {
 
                 <button class="perfil" type="submit">
                     <div class="avatar">
-                        <?= (int)($perfil['numero_perfil'] ?? ($indice + 1)) === 1 ? '🧢' : '⚔️' ?>
+                        <?= (int)($perfil['numero_perfil'] ?? ($indice + 1)) === 1 ? '<img src="menu inicial/images/bananinha.png" alt="Bananinha">' : '<img src="menu inicial/images/3xT.png" alt="3xT">' ?>
                     </div>
                     <h2><?= htmlspecialchars($perfil['nome_perfil'], ENT_QUOTES, 'UTF-8') ?></h2>
                     <p>Save independente</p>

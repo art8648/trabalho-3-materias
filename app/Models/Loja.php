@@ -6,74 +6,125 @@ namespace Peakmon\Models;
 
 use DomainException;
 use PDO;
+use PDOException;
 
 class Loja
 {
     private PDO $pdo;
 
-    public function __construct(PDO $pdo) { $this->pdo = $pdo; }
-
-    public function listarItens(int $idPerfil): array
+    public function __construct(PDO $pdo)
     {
-        $consulta = $this->pdo->prepare("
-            SELECT i.id, i.nome, i.descricao, i.preco, i.tipo_efeito, i.valor_efeito,
-                   i.status_curado, COALESCE(ii.quantidade, 0) AS quantidade
-            FROM item i
-            LEFT JOIN inventario inv ON inv.id_perfil = :id_perfil
-            LEFT JOIN inventario_item ii ON ii.id_inventario = inv.id AND ii.id_item = i.id
-            WHERE i.ativo = TRUE
-            ORDER BY i.preco ASC, i.nome ASC
-        ");
-        $consulta->execute(['id_perfil' => $idPerfil]);
-        return $consulta->fetchAll();
+        $this->pdo = $pdo;
     }
 
-    public function listarInventario(int $idPerfil): array
+    /** Retorna os itens ativos e o saldo do perfil. */
+    public function carregarLoja(int $idPerfil, int $idUsuario): array
     {
-        $consulta = $this->pdo->prepare("
-            SELECT i.id, i.nome, i.descricao, i.tipo_efeito, i.valor_efeito,
-                   i.status_curado, ii.quantidade
-            FROM inventario inv
-            INNER JOIN inventario_item ii ON ii.id_inventario = inv.id
-            INNER JOIN item i ON i.id = ii.id_item
-            WHERE inv.id_perfil = :id_perfil AND ii.quantidade > 0
-            ORDER BY i.nome ASC
-        ");
-        $consulta->execute(['id_perfil' => $idPerfil]);
-        return $consulta->fetchAll();
+        $this->validarPerfil($idPerfil, $idUsuario);
+
+        $saldo = $this->pdo->prepare('SELECT dinheiro FROM perfil WHERE id = :perfil AND id_usuario = :usuario');
+        $saldo->execute(['perfil' => $idPerfil, 'usuario' => $idUsuario]);
+        $dinheiro = $saldo->fetchColumn();
+        if ($dinheiro === false) {
+            throw new DomainException('Perfil nao encontrado.');
+        }
+
+        $consulta = $this->pdo->query('
+            SELECT id, nome, descricao, preco, tipo_efeito, valor_efeito, status_curado
+            FROM item
+            WHERE ativo = TRUE
+            ORDER BY tipo_efeito, preco, nome
+        ');
+
+        return [
+            'dinheiro' => (int) $dinheiro,
+            'itens' => $consulta->fetchAll(PDO::FETCH_ASSOC),
+        ];
     }
 
+    /**
+     * Registra a compra. Os triggers do banco validam o saldo, descontam o valor,
+     * adicionam os itens ao inventario e registram o log da loja.
+     */
     public function comprar(int $idPerfil, int $idUsuario, int $idItem, int $quantidade): array
     {
-        if ($idPerfil <= 0 || $idUsuario <= 0 || $idItem <= 0 || $quantidade < 1 || $quantidade > 99) {
-            throw new DomainException('Dados da compra invalidos.');
+        if ($idItem <= 0) {
+            throw new DomainException('Item invalido.');
         }
+        if ($quantidade < 1 || $quantidade > 99) {
+            throw new DomainException('Escolha uma quantidade entre 1 e 99.');
+        }
+
         $this->pdo->beginTransaction();
         try {
-            $perfil = $this->pdo->prepare('SELECT id FROM perfil WHERE id = :id_perfil AND id_usuario = :id_usuario FOR UPDATE');
-            $perfil->execute(['id_perfil' => $idPerfil, 'id_usuario' => $idUsuario]);
-            if ($perfil->fetchColumn() === false) throw new DomainException('Perfil nao encontrado para esta conta.');
+            $perfil = $this->pdo->prepare('
+                SELECT id FROM perfil
+                WHERE id = :perfil AND id_usuario = :usuario
+                FOR UPDATE
+            ');
+            $perfil->execute(['perfil' => $idPerfil, 'usuario' => $idUsuario]);
+            if ($perfil->fetchColumn() === false) {
+                throw new DomainException('Perfil nao encontrado para este usuario.');
+            }
 
-            $item = $this->pdo->prepare('SELECT nome, ativo FROM item WHERE id = :id_item LIMIT 1');
-            $item->execute(['id_item' => $idItem]);
-            $dadosItem = $item->fetch();
-            if ($dadosItem === false || !(bool)$dadosItem['ativo']) throw new DomainException('Este item nao esta disponivel na loja.');
+            $item = $this->pdo->prepare('
+                SELECT nome, preco FROM item
+                WHERE id = :item AND ativo = TRUE
+            ');
+            $item->execute(['item' => $idItem]);
+            $dadosItem = $item->fetch(PDO::FETCH_ASSOC);
+            if (!$dadosItem) {
+                throw new DomainException('Este item nao esta disponivel na loja.');
+            }
 
-            // Os triggers trg_compra_loja_validar/aplicar/criar_log fazem as validacoes e atualizacoes.
-            $compra = $this->pdo->prepare('INSERT INTO compra_loja (id_perfil, id_item, quantidade) VALUES (:id_perfil, :id_item, :quantidade)');
-            $compra->execute(['id_perfil' => $idPerfil, 'id_item' => $idItem, 'quantidade' => $quantidade]);
+            $total = (int) $dadosItem['preco'] * $quantidade;
 
-            $saldo = $this->pdo->prepare('SELECT dinheiro FROM perfil WHERE id = :id_perfil');
-            $saldo->execute(['id_perfil' => $idPerfil]);
-            $dinheiro = (int)$saldo->fetchColumn();
+            // A insercao dispara os tres triggers de compra ja existentes no banco.
+            $compra = $this->pdo->prepare('
+                INSERT INTO compra_loja (id_perfil, id_item, quantidade)
+                VALUES (:perfil, :item, :quantidade)
+            ');
+            $compra->execute([
+                'perfil' => $idPerfil,
+                'item' => $idItem,
+                'quantidade' => $quantidade,
+            ]);
+
+            $saldoConsulta = $this->pdo->prepare('SELECT dinheiro FROM perfil WHERE id = :perfil');
+            $saldoConsulta->execute(['perfil' => $idPerfil]);
+            $saldoAtual = (int) $saldoConsulta->fetchColumn();
+
             $this->pdo->commit();
-            return ['sucesso' => true, 'mensagem' => $dadosItem['nome'].' comprado com sucesso!', 'dinheiro' => $dinheiro];
+
+            return [
+                'mensagem' => $quantidade . 'x ' . $dadosItem['nome'] . ' comprado(s) com sucesso!',
+                'total' => $total,
+                'dinheiro' => $saldoAtual,
+            ];
         } catch (\Throwable $erro) {
-            if ($this->pdo->inTransaction()) $this->pdo->rollBack();
-            if ($erro instanceof \PDOException && (($erro->errorInfo[0] ?? '') === '45000' || (string)$erro->getCode() === '45000')) {
-                throw new DomainException($erro->errorInfo[2] ?? 'Nao foi possivel concluir a compra.', 0, $erro);
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+
+            if ($erro instanceof PDOException) {
+                $mensagem = $erro->getMessage();
+                if (stripos($mensagem, 'Saldo insuficiente') !== false) {
+                    throw new DomainException('Voce nao tem Pokédollars suficientes para essa compra.');
+                }
+                if (stripos($mensagem, 'nao esta disponivel') !== false || stripos($mensagem, 'não está disponível') !== false) {
+                    throw new DomainException('Este item nao esta disponivel na loja.');
+                }
             }
             throw $erro;
+        }
+    }
+
+    private function validarPerfil(int $idPerfil, int $idUsuario): void
+    {
+        $consulta = $this->pdo->prepare('SELECT id FROM perfil WHERE id = :perfil AND id_usuario = :usuario LIMIT 1');
+        $consulta->execute(['perfil' => $idPerfil, 'usuario' => $idUsuario]);
+        if ($consulta->fetchColumn() === false) {
+            throw new DomainException('Perfil nao encontrado para este usuario.');
         }
     }
 }

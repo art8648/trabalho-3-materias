@@ -190,7 +190,7 @@ class Mochila
 
             $hpAtual = (int) $pokemon['hp_atual'];
             $hpMax = (int) $pokemon['hp_max'];
-            $desmaiado = (bool) $pokemon['desmaiado'];
+            $desmaiado = ($hpAtual <= 0); // HP e a fonte de verdade; corrige flag desmaiado inconsistente
             $status = $pokemon['status_condicao'];
             $novoHp = $hpAtual;
             $novoDesmaiado = $desmaiado ? 1 : 0;
@@ -287,6 +287,14 @@ class Mochila
             WHERE pc.id = :capturado AND pc.id_perfil = :perfil
               AND i.nome = :pedra AND i.tipo_efeito = :efeito
               AND (er.sexo_requerido IS NULL OR er.sexo_requerido = pc.sexo)
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM evolution_rules etapa1
+                  INNER JOIN evolution_rules etapa2
+                    ON etapa2.id_pokemon_origem = etapa1.id_pokemon_destino
+                  WHERE etapa1.id_pokemon_origem = er.id_pokemon_origem
+                    AND etapa2.id_pokemon_destino = er.id_pokemon_destino
+              )
             ORDER BY pd.nome
         ');
         $consulta->execute([
@@ -304,7 +312,7 @@ class Mochila
         $this->pdo->beginTransaction();
         try {
             $idInventario = $this->buscarInventario($idPerfil, $idUsuario, true);
-            $pc = $this->pdo->prepare('SELECT pc.id, pc.sexo, pc.id_pokemon, p.nome FROM pokemon_capturado pc INNER JOIN pokemon p ON p.id = pc.id_pokemon WHERE pc.id = :id AND pc.id_perfil = :perfil FOR UPDATE');
+            $pc = $this->pdo->prepare('SELECT pc.id, pc.sexo, pc.id_pokemon, pc.hp_atual, pc.desmaiado, p.nome FROM pokemon_capturado pc INNER JOIN pokemon p ON p.id = pc.id_pokemon WHERE pc.id = :id AND pc.id_perfil = :perfil FOR UPDATE');
             $pc->execute(['id' => $idCapturado, 'perfil' => $idPerfil]);
             $pokemon = $pc->fetch(PDO::FETCH_ASSOC);
             if (!$pokemon) {
@@ -320,6 +328,14 @@ class Mochila
                   AND er.id_pokemon_destino = :destino
                   AND i.nome = :pedra AND i.tipo_efeito = :efeito
                   AND (er.sexo_requerido IS NULL OR er.sexo_requerido = :sexo)
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM evolution_rules etapa1
+                      INNER JOIN evolution_rules etapa2
+                        ON etapa2.id_pokemon_origem = etapa1.id_pokemon_destino
+                      WHERE etapa1.id_pokemon_origem = er.id_pokemon_origem
+                        AND etapa2.id_pokemon_destino = er.id_pokemon_destino
+                  )
                 LIMIT 1
                 FOR UPDATE
             ');
@@ -351,9 +367,11 @@ class Mochila
 
             $nomeDestino = (string) $dadosDestino['nome'];
             $hpDestino = (int) $dadosDestino['hp_destino'];
-            $hpNovo = min((int) $pokemon['hp_atual'], $hpDestino);
-            $evoluir = $this->pdo->prepare('UPDATE pokemon_capturado SET id_pokemon = :destino, hp_atual = :hp WHERE id = :id AND id_perfil = :perfil');
-            $evoluir->execute(['destino' => $idDestino, 'hp' => $hpNovo, 'id' => $idCapturado, 'perfil' => $idPerfil]);
+            // Evoluir recupera totalmente o Pokemon, usando o HP maximo da nova especie.
+            $hpNovo = $hpDestino;
+            $desmaiadoNovo = 0;
+            $evoluir = $this->pdo->prepare('UPDATE pokemon_capturado SET id_pokemon = :destino, hp_atual = :hp, desmaiado = :desmaiado WHERE id = :id AND id_perfil = :perfil');
+            $evoluir->execute(['destino' => $idDestino, 'hp' => $hpNovo, 'desmaiado' => $desmaiadoNovo, 'id' => $idCapturado, 'perfil' => $idPerfil]);
             $this->consumirItem($idInventario, (int) $dadosPedra['id'], (int) $dadosPedra['quantidade']);
             $this->pdo->commit();
             return $pokemon['nome'] . ' evoluiu para ' . $nomeDestino . '!';
