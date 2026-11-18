@@ -1538,3 +1538,28 @@ SELECT
     COUNT(*) AS total_conexoes
 FROM area_conexao
 WHERE id_area = @id_area_nova;
+
+UPDATE item
+SET preco = CASE nome
+    WHEN 'Potion' THEN 50
+    WHEN 'Super Potion' THEN 100
+    WHEN 'Hyper Potion' THEN 180
+    WHEN 'Max Potion' THEN 250
+    WHEN 'Full Restore' THEN 300
+    WHEN 'Antidote' THEN 30
+    WHEN 'Burn Heal' THEN 30
+    WHEN 'Ice Heal' THEN 30
+    WHEN 'Awakening' THEN 30
+    WHEN 'Paralyze Heal' THEN 30
+    WHEN 'Full Heal' THEN 80
+    WHEN 'Revive' THEN 150
+    WHEN 'Pedra Universal' THEN 250
+    ELSE preco
+END
+WHERE nome IN (
+    'Potion', 'Super Potion', 'Hyper Potion',
+    'Max Potion', 'Full Restore',
+    'Antidote', 'Burn Heal', 'Ice Heal',
+    'Awakening', 'Paralyze Heal', 'Full Heal',
+    'Revive', 'Pedra Universal'
+);
