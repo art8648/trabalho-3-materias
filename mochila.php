@@ -255,11 +255,27 @@ button,select,input{font:inherit}button{cursor:pointer}.shell{width:min(1180px,1
 <div class="toast hidden" id="toast" role="status"></div>
 <script>
 (() => {
+    const chaveScrollMochila = 'peakmon_mochila_scroll';
+    const scrollSalvo = sessionStorage.getItem(chaveScrollMochila);
+    if (scrollSalvo !== null) {
+        sessionStorage.removeItem(chaveScrollMochila);
+        window.addEventListener('load', () => window.scrollTo(0, Number(scrollSalvo) || 0), {once:true});
+    }
+    const recarregarPreservandoScroll = () => {
+        sessionStorage.setItem(chaveScrollMochila, String(window.scrollY));
+        window.location.reload();
+    };
     const csrf = <?= json_encode($csrf, JSON_UNESCAPED_UNICODE) ?>;
     const form = async (acao, dados = {}) => {
         const body = new URLSearchParams({acao, csrf, ...dados});
         const resposta = await fetch('mochila.php', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body});
-        const resultado = await resposta.json();
+        const texto = await resposta.text();
+        let resultado;
+        try { resultado = JSON.parse(texto); }
+        catch (erroJson) {
+            console.error('Resposta inesperada do servidor:', texto);
+            throw new Error('O servidor retornou uma resposta invalida. Confira o log do PHP.');
+        }
         if (!resposta.ok || !resultado.sucesso) throw new Error(resultado.mensagem || 'Nao foi possivel concluir a acao.');
         return resultado;
     };
@@ -317,7 +333,7 @@ button,select,input{font:inherit}button{cursor:pointer}.shell{width:min(1180px,1
         const alvo = document.getElementById('pokemon-alvo').value;
         if (!itemSelecionado || !alvo) return toast('Selecione um Pokemon primeiro.', true);
         botaoUsar.disabled = true;
-        try { const r = await form('usar_item', {id_item:itemSelecionado.id, id_capturado:alvo}); toast(r.mensagem); setTimeout(() => location.reload(), 850); }
+        try { const r = await form('usar_item', {id_item:itemSelecionado.id, id_capturado:alvo}); toast(r.mensagem); setTimeout(recarregarPreservandoScroll, 850); }
         catch (e) { toast(e.message, true); botaoUsar.disabled = false; }
     });
 

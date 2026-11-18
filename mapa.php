@@ -96,6 +96,10 @@ try {
         if (($_POST['acao'] ?? '') === 'reiniciar_perfil') {
             (new Perfil($pdo))->reiniciarEscolhas($idPerfil, $idUsuario);
 
+            // O reinicio tambem deve devolver o saldo do perfil a zero.
+            $zerarSaldo = $pdo->prepare('UPDATE perfil SET dinheiro = 0 WHERE id = :perfil');
+            $zerarSaldo->execute(['perfil' => $idPerfil]);
+
             echo json_encode([
                 'sucesso' => true,
                 'mensagem' => 'Perfil reiniciado.',

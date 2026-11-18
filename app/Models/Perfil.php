@@ -123,11 +123,25 @@ class Perfil
                 throw new DomainException('Perfil nao encontrado.');
             }
 
+            // Limpa os itens da mochila deste perfil, sem apagar o inventario.
+            $limparMochila = $this->pdo->prepare('
+                DELETE ii
+                FROM inventario_item ii
+                INNER JOIN inventario i
+                    ON i.id = ii.id_inventario
+                WHERE i.id_perfil = :id_perfil
+            ');
+            $limparMochila->execute(['id_perfil' => $idPerfil]);
+
+            // Apaga os Pokemon capturados; os vinculos do time sao removidos por cascata.
             $apagar = $this->pdo->prepare('DELETE FROM pokemon_capturado WHERE id_perfil = :id_perfil');
             $apagar->execute(['id_perfil' => $idPerfil]);
 
             $limpar = $this->pdo->prepare('
-                UPDATE perfil SET id_personagem = NULL
+                UPDATE perfil
+                SET id_personagem = NULL,
+                    dinheiro = 0,
+                    jogo_concluido = 0
                 WHERE id = :id_perfil AND id_usuario = :id_usuario
             ');
             $limpar->execute([
