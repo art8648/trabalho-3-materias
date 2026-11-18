@@ -39,10 +39,20 @@ body {
     height: 36%;
     left: 31%; 
 }
+/* Caixa que ocupa a tela toda e centraliza o botao no meio (horizontal e vertical). */
+.area-botao {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    pointer-events: none; /* a caixa vazia nao bloqueia cliques nas imagens */
+}
+
 .botao-perfil {
-    top: 75%;
-    left: 5050px;
-    transform: translate(-50%, -50%);
+    pointer-events: auto; /* o botao em si continua clicavel */
+    display: inline-block;
 
     padding: 15px 35px;
 
@@ -64,5 +74,5 @@ body {
 .botao-perfil:hover {
     background: #31cb5c;
     color: #17252d;
-    transform: translate(-50%, -50%) scale(1.08);
+    transform: scale(1.08);
 }

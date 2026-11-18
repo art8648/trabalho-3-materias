@@ -218,6 +218,42 @@
             }
 
         }
+        /* BOTÃO DE CONFIRMAÇÃO */
+    form {
+        margin-top: 35px;
+    }
+
+    #confirmar {
+        width: 180px;
+        height: 65px;
+        background: #222;
+        color: white;
+        border: 1px solid #444;
+        font-size: 13px;
+        letter-spacing: 3px;
+
+        cursor: pointer;
+
+        transition:
+            background 0.35s ease,
+            border-color 0.35s ease,
+            box-shadow 0.35s ease,
+            transform 0.35s ease;
+    }
+    /* EFEITO HOVER */
+    #confirmar:hover:not(:disabled) {
+        background: #333;
+        border-color: rgba(255,255,255,0.85);
+        box-shadow:
+            0 0 8px rgba(255,255,255,0.25),
+            0 0 20px rgba(255,255,255,0.12);
+        transform: scale(1.05);
+        }
+    /* BOTÃO DESABILITADO */
+    #confirmar:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+    }
 
     </style>
 </head>

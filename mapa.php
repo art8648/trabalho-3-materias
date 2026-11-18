@@ -4,6 +4,7 @@ declare(strict_types=1);
 use Peakmon\Models\Inicial;
 use Peakmon\Models\Mapa;
 use Peakmon\Models\Time;
+use Peakmon\Models\Captura;
 use Peakmon\Models\Perfil;
 
 require_once __DIR__ . '/app/sessao.php';
@@ -33,12 +34,14 @@ $idPerfil = (int) $_SESSION['perfil_id'];
 $mostrarInicial = false;
 $iniciais = [];
 $slotsTime = [];
+$roleta = [];
 
 try {
     $pdo = require __DIR__ . '/config/database.php';
     $mapa = new Mapa($pdo);
     $inicial = new Inicial($pdo);
     $time = new Time($pdo);
+    $captura = new Captura($pdo);
 
     // O mesmo arquivo recebe o clique do mapa e salva o novo ponto.
     if ($ehPost) {
@@ -119,18 +122,23 @@ try {
             exit;
         }
 
+        // Se o destino for uma Pokebola, o Captura sorteia o Pokemon na mesma transacao.
         $resultado = $mapa->avancar(
             $idPerfil,
             $idUsuario,
-            (int) $idNoDestino
+            (int) $idNoDestino,
+            [$captura, 'capturarAleatorio']
         );
 
         echo json_encode($resultado, JSON_UNESCAPED_UNICODE);
         exit;
     }
 
-    $dados = $mapa->carregarMapa($idPerfil, $idUsuario);
+    // O time e carregado primeiro: o painel aparece mesmo que o mapa falhe.
     $slotsTime = $time->listar($idPerfil);
+    $dados = $mapa->carregarMapa($idPerfil, $idUsuario);
+    // Pokemon que aparecem na roleta (so desenha; o sorteio e feito no servidor).
+    $roleta = $captura->listarRoleta();
 
     // Perfil sem Pokemon ainda: o pop-up de escolha aparece em cima do mapa.
     if (!$inicial->perfilTemInicial($idPerfil)) {
@@ -168,7 +176,23 @@ try {
     $dados = null;
 }
 
-$iconePorTipo = static function (string $tipo): string {
+// Se o time nao pode ser lido, mostra as posicoes vazias mesmo assim.
+if ($slotsTime === []) {
+    $slotsTime = array_fill(1, Time::POSICOES, null);
+}
+
+// O mapa so e desenhado quando a area existe e tem pontos cadastrados.
+$mapaPronto = !isset($mensagemErro)
+    && $dados !== null
+    && $dados['area'] !== null
+    && count($dados['nos']) > 0;
+
+// BATALHA com codigo TREINADOR_* = treinador; os demais BATALHA = mato (Pokemon selvagem).
+$iconePorTipo = static function (string $tipo, string $codigo = ''): string {
+    if ($tipo === 'BATALHA' && str_starts_with($codigo, 'TREINADOR')) {
+        return '🥋';
+    }
+
     return match ($tipo) {
         'INICIO' => '🧑🏻',
         'BATALHA' => '🌿',
@@ -497,18 +521,6 @@ $corPorTipo = static function (string $tipo): string {
 
         .acesso-placeholder:last-child { margin-bottom: 0; }
 
-        .acesso-placeholder[href] {
-            cursor: pointer;
-            text-decoration: none;
-            transition: transform .12s ease, background .12s ease;
-        }
-        .acesso-placeholder[href]:hover {
-            background: #e5efd9;
-            border-style: solid;
-            color: #385b43;
-            transform: translateY(-2px);
-        }
-
         .acesso-icone {
             font-size: 30px;
             line-height: 1;
@@ -666,6 +678,149 @@ $corPorTipo = static function (string $tipo): string {
         }
 
         .time-aviso.com-erro { color: #a8281b; }
+
+        .mapa-aviso .erro,
+        .mapa-aviso .sem-area {
+            width: 100%;
+            margin: 0;
+        }
+
+        @media (max-width: 900px) {
+            .mapa-aviso { grid-row: 1; }
+        }
+
+        /* Link da mochila (alteracao do grupo) */
+        .acesso-placeholder[href] {
+            cursor: pointer;
+            text-decoration: none;
+            transition: transform .12s ease, background .12s ease;
+        }
+        .acesso-placeholder[href]:hover {
+            background: #e5efd9;
+            border-style: solid;
+            color: #385b43;
+            transform: translateY(-2px);
+        }
+
+        /* ===== ROLETA DE CAPTURA (aparece em cima do mapa) ===== */
+
+        body.roleta-aberta { overflow: hidden; }
+
+        .roleta-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 120;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 110px 16px 24px;
+            overflow-y: auto;
+            text-align: center;
+            color: #fff;
+            font-family: monospace;
+            background: rgba(5, 5, 5, 0.84);
+            backdrop-filter: blur(3px);
+            animation: roleta-aparecer 0.25s ease;
+        }
+
+        .roleta-overlay[hidden] { display: none; }
+
+        @keyframes roleta-aparecer {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .roleta-titulo {
+            margin: 0 0 6px;
+            font-size: 26px;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+        }
+
+        .roleta-sub {
+            min-height: 1.4em;
+            margin: 0 0 26px;
+            font-size: 13px;
+            letter-spacing: 2px;
+            color: #b8b8b8;
+        }
+
+        .roleta-palco {
+            position: relative;
+            width: min(86vw, 420px);
+            flex: none;
+        }
+
+        .roleta-roda {
+            display: block;
+            width: 100%;
+            height: auto;
+            transform-origin: 50% 50%;
+            filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.6));
+        }
+
+        /* Setinha fixa no topo: a fatia que parar embaixo dela e a sorteada. */
+        .roleta-seta {
+            position: absolute;
+            z-index: 2;
+            left: 50%;
+            top: -16px;
+            width: 0;
+            height: 0;
+            transform: translateX(-50%);
+            border-left: 15px solid transparent;
+            border-right: 15px solid transparent;
+            border-top: 30px solid #f3d86c;
+            filter: drop-shadow(0 2px 0 #20252a);
+        }
+
+        /* Aviso "Voce capturou ..." no topo da tela. */
+        .roleta-resultado {
+            position: absolute;
+            top: 22px;
+            left: 50%;
+            z-index: 3;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            max-width: min(94vw, 560px);
+            padding: 12px 18px;
+            border: 3px solid #292e31;
+            background: #eee9dc;
+            box-shadow: 4px 4px #42484b;
+            color: #20252a;
+            text-align: left;
+            line-height: 1.45;
+            opacity: 0;
+            visibility: hidden;
+            transform: translate(-50%, -18px);
+            transition: opacity 0.4s ease, transform 0.4s ease;
+        }
+
+        .roleta-resultado.visivel {
+            opacity: 1;
+            visibility: visible;
+            transform: translate(-50%, 0);
+        }
+
+        .roleta-resultado img {
+            width: 64px;
+            height: 64px;
+            flex: none;
+            object-fit: contain;
+            border: 2px solid #34383a;
+            border-radius: 50%;
+            background: #f8f4e8;
+        }
+
+        .roleta-resultado strong { display: block; font-size: 17px; }
+        .roleta-resultado span { font-size: 13px; }
+
+        @media (prefers-reduced-motion: reduce) {
+            .roleta-overlay { animation: none; }
+            .roleta-resultado { transition: none; }
+        }
 
         /* ===== POP-UP: ESCOLHA DO POKEMON INICIAL ===== */
 
@@ -924,26 +1079,10 @@ $corPorTipo = static function (string $tipo): string {
         : 'PEAKMON: THE BIGOLIN CRISIS' ?>
 </h1>
 
-<?php if (isset($mensagemErro)): ?>
-    <div class="erro"><?= $escapar($mensagemErro) ?></div>
-<?php elseif ($dados === null): ?>
-    <div class="erro">Nao foi possivel carregar os dados do mapa.</div>
-<?php elseif ($dados['area'] === null): ?>
-    <div class="sem-area">
-        <h2>O mapa ainda nao foi cadastrado!</h2>
-        <p>O perfil e o save estao funcionando, mas ainda precisamos cadastrar a area, os pontos e os caminhos no banco de dados.</p>
-    </div>
-<?php elseif (count($dados['nos']) === 0): ?>
-    <div class="sem-area">
-        <h2>Esta area ainda nao possui pontos.</h2>
-        <p>Cadastre os nos da area na tabela <strong>area_no</strong>.</p>
-    </div>
-<?php else: ?>
-
-    <main>
-        <div class="area-jogo">
-        <aside class="time" aria-label="Time">
-            <h2 class="time-titulo">TIME</h2>
+<main>
+    <div class="area-jogo">
+        <aside class="time" aria-label="Seu time">
+            <h2 class="time-titulo">SEU TIME</h2>
 
             <ol class="time-lista" id="time-lista">
                 <?php foreach ($slotsTime as $posicao => $slot): ?>
@@ -971,6 +1110,25 @@ $corPorTipo = static function (string $tipo): string {
             <p class="time-aviso" id="time-aviso">Clique em um Pokémon e depois na posição para onde quer levá-lo.</p>
         </aside>
 
+        <?php if (!$mapaPronto): ?>
+            <div class="mapa-aviso">
+                <?php if (isset($mensagemErro)): ?>
+                    <div class="erro"><?= $escapar($mensagemErro) ?></div>
+                <?php elseif ($dados === null): ?>
+                    <div class="erro">Nao foi possivel carregar os dados do mapa.</div>
+                <?php elseif ($dados['area'] === null): ?>
+                    <div class="sem-area">
+                        <h2>O mapa ainda nao foi cadastrado!</h2>
+                        <p>O banco ainda nao tem o mapa. Importe o arquivo <strong>peakmon_base.sql</strong> no MySQL.</p>
+                    </div>
+                <?php else: ?>
+                    <div class="sem-area">
+                        <h2>Esta area ainda nao possui pontos.</h2>
+                        <p>Cadastre os nos da area na tabela <strong>area_no</strong>.</p>
+                    </div>
+                <?php endif; ?>
+            </div>
+        <?php else: ?>
         <section class="mapa" aria-label="Mapa da area">
             <svg class="caminhos" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
                 <?php foreach ($dados['conexoes'] as $conexao): ?>
@@ -990,7 +1148,7 @@ $corPorTipo = static function (string $tipo): string {
                     $proximo = in_array($idNo, $idsProximos, true);
                     $x = max(3, min(97, (int) $no['pos_x']));
                     $y = max(3, min(97, (int) $no['pos_y']));
-                    $icone = $iconePorTipo($no['tipo_no']);
+                    $icone = $iconePorTipo($no['tipo_no'], (string) $no['codigo']);
                     $tituloNo = $no['titulo'];
                     $descricaoNo = $no['descricao'] ?? '';
                 ?>
@@ -1001,6 +1159,7 @@ $corPorTipo = static function (string $tipo): string {
                         class="no"
                         style="left: <?= $x ?>%; top: <?= $y ?>%;"
                         data-id-no-destino="<?= $idNo ?>"
+                        data-tipo="<?= $escapar($no['tipo_no']) ?>"
                         aria-label="Avancar para <?= $escapar($tituloNo) ?>"
                     >
                         <?= $icone ?>
@@ -1018,6 +1177,7 @@ $corPorTipo = static function (string $tipo): string {
                 <?php endif; ?>
             <?php endforeach; ?>
         </section>
+        <?php endif; ?>
 
         <aside class="acessos-laterais" aria-label="Acessos do jogo">
             <h2 class="acessos-titulo">ACESSOS</h2>
@@ -1036,6 +1196,7 @@ $corPorTipo = static function (string $tipo): string {
         </aside>
         </div>
 
+        <?php if ($mapaPronto): ?>
         <section class="painel-inferior">
             <?php if (($tipoNoAtual === 'BATALHA' || $tipoNoAtual === 'CHEFE') && !$dados['batalha_vencida']): ?>
                 <strong>Você chegou a um ponto de batalha!</strong><br>
@@ -1054,12 +1215,11 @@ $corPorTipo = static function (string $tipo): string {
         </section>
 
         <section class="legenda">
-            🌿 Batalha &nbsp; 🔴 Captura &nbsp; 🎁 Item &nbsp; 🛒 Loja<br>
-            🏥 Cura &nbsp; 📡 Evento &nbsp; ⭐ Chefe &nbsp; 🏁 Final
+            🌿 Mato (Pokémon selvagem) &nbsp; 🥋 Treinador &nbsp; 🔴 Captura &nbsp; 🎁 Item<br>
+            🛒 Loja &nbsp; 🏥 Centro Pokémon &nbsp; 📡 Evento &nbsp; ⭐ Chefe
         </section>
+        <?php endif; ?>
     </main>
-
-<?php endif; ?>
 
 <?php if ($mostrarInicial): ?>
     <div class="inicial-overlay" id="inicial-overlay" role="dialog" aria-modal="true" aria-labelledby="inicial-titulo">
@@ -1102,11 +1262,198 @@ $corPorTipo = static function (string $tipo): string {
     </div>
 <?php endif; ?>
 
+<div class="roleta-overlay" id="roleta-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="roleta-titulo">
+    <div class="roleta-resultado" id="roleta-resultado" aria-live="polite"></div>
+
+    <h2 class="roleta-titulo" id="roleta-titulo">Pokébola!</h2>
+    <p class="roleta-sub" id="roleta-sub">Girando a roleta...</p>
+
+    <div class="roleta-palco">
+        <div class="roleta-seta" aria-hidden="true"></div>
+        <svg class="roleta-roda" id="roleta-roda" viewBox="0 0 400 400" aria-hidden="true"></svg>
+    </div>
+</div>
+
 <script>
+    // Pokemon da roleta de captura (o sorteio e feito no servidor; aqui so se desenha).
+    const ROLETA = <?= json_encode($roleta, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+
+    // ===== Roleta de captura =====
+    const Roleta = (function () {
+        const overlay = document.getElementById('roleta-overlay');
+        const roda = document.getElementById('roleta-roda');
+        const sub = document.getElementById('roleta-sub');
+        const resultado = document.getElementById('roleta-resultado');
+        const total = ROLETA.length;
+        const fatia = total > 0 ? 360 / total : 360;
+        let montada = false;
+        let podePular = false;
+
+        const esperar = (ms) => new Promise((resolver) => setTimeout(resolver, ms));
+
+        // Ponto na roda: o angulo conta em graus, no sentido horario, a partir do topo.
+        function ponto(raio, graus) {
+            const rad = graus * Math.PI / 180;
+            return [200 + raio * Math.sin(rad), 200 - raio * Math.cos(rad)];
+        }
+
+        function montar() {
+            if (montada || total === 0) return;
+            montada = true;
+
+            const NS = 'http://www.w3.org/2000/svg';
+            const criar = (nome, atributos) => {
+                const elemento = document.createElementNS(NS, nome);
+                Object.keys(atributos).forEach((chave) => elemento.setAttribute(chave, atributos[chave]));
+                return elemento;
+            };
+
+            ROLETA.forEach((pokemon, i) => {
+                const inicio = i * fatia;
+                const fim = (i + 1) * fatia;
+                const meio = inicio + fatia / 2;
+                const [x0, y0] = ponto(190, inicio);
+                const [x1, y1] = ponto(190, fim);
+
+                roda.appendChild(criar('path', {
+                    d: 'M200 200 L' + x0 + ' ' + y0 + ' A190 190 0 0 1 ' + x1 + ' ' + y1 + ' Z',
+                    fill: 'hsl(' + Math.round(i * 360 / total) + ', 65%, 74%)',
+                    stroke: '#292e31',
+                    'stroke-width': 2
+                }));
+
+                // Imagem e nome ficam num grupo girado para o meio da fatia.
+                const grupo = criar('g', { transform: 'rotate(' + meio + ' 200 200)' });
+
+                const imagem = criar('image', {
+                    href: pokemon.imagem,
+                    x: 200 - 20,
+                    y: 200 - 124 - 20,
+                    width: 40,
+                    height: 40
+                });
+                grupo.appendChild(imagem);
+
+                const nome = criar('text', {
+                    x: 200,
+                    y: 200 - 166,
+                    'text-anchor': 'middle',
+                    'font-size': 10,
+                    'font-weight': 'bold',
+                    'font-family': 'monospace',
+                    fill: '#20252a'
+                });
+                nome.textContent = pokemon.nome;
+                grupo.appendChild(nome);
+
+                roda.appendChild(grupo);
+            });
+
+            roda.appendChild(criar('circle', {
+                cx: 200, cy: 200, r: 190, fill: 'none', stroke: '#292e31', 'stroke-width': 6
+            }));
+            roda.appendChild(criar('circle', {
+                cx: 200, cy: 200, r: 24, fill: '#eee9dc', stroke: '#292e31', 'stroke-width': 4
+            }));
+        }
+
+        function abrir() {
+            montar();
+
+            roda.style.transition = 'none';
+            roda.style.transform = 'rotate(0deg)';
+            roda.getBoundingClientRect(); // forca o navegador a aplicar o reset
+
+            resultado.classList.remove('visivel');
+            resultado.textContent = '';
+            sub.textContent = 'Girando a roleta...';
+            podePular = false;
+
+            overlay.hidden = false;
+            document.body.classList.add('roleta-aberta');
+        }
+
+        function fechar() {
+            overlay.hidden = true;
+            document.body.classList.remove('roleta-aberta');
+        }
+
+        // Gira ate parar no Pokemon que o servidor sorteou, mostra o aviso e recarrega o mapa.
+        async function girarAte(captura) {
+            let indice = ROLETA.findIndex((pokemon) => pokemon.id === captura.id_pokemon);
+            if (indice < 0) {
+                indice = ROLETA.findIndex((pokemon) => pokemon.nome === captura.nome);
+            }
+            if (indice < 0) {
+                window.location.reload();
+                return;
+            }
+
+            const reduzir = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            const duracao = reduzir ? 700 : 5200;
+            const voltas = reduzir ? 1 : 6;
+
+            // Para o ponteiro (no topo) cair na fatia certa, em qualquer ponto dela.
+            const meio = indice * fatia + fatia / 2;
+            const folga = (Math.random() - 0.5) * fatia * 0.7;
+            const alvo = voltas * 360 - meio + folga;
+
+            roda.style.transition = 'transform ' + duracao + 'ms cubic-bezier(0.12, 0.62, 0.08, 1)';
+            roda.getBoundingClientRect();
+            roda.style.transform = 'rotate(' + alvo + 'deg)';
+
+            await Promise.race([
+                new Promise((resolver) => roda.addEventListener('transitionend', resolver, { once: true })),
+                esperar(duracao + 600)
+            ]);
+
+            sub.textContent = '';
+            mostrarResultado(captura);
+
+            // Fica um instante na tela; clicar acelera.
+            podePular = true;
+            await Promise.race([
+                esperar(4200),
+                new Promise((resolver) => overlay.addEventListener('click', resolver, { once: true }))
+            ]);
+
+            // A roleta sai e o mapa e atualizado (posicao nova e time).
+            window.location.reload();
+        }
+
+        function mostrarResultado(captura) {
+            resultado.textContent = '';
+
+            const foto = document.createElement('img');
+            foto.src = captura.imagem;
+            foto.alt = captura.nome;
+
+            const texto = document.createElement('div');
+            const titulo = document.createElement('strong');
+            titulo.textContent = 'Você capturou ' + captura.nome + '!';
+            const detalhe = document.createElement('span');
+            detalhe.textContent = captura.destino === 'time'
+                ? 'Ele entrou no seu time (posição ' + captura.posicao + ').'
+                : 'Seu time está cheio (5/5): ' + captura.nome + ' foi para o PC (Arquivo Bigolin, na Mochila).';
+
+            texto.appendChild(titulo);
+            texto.appendChild(detalhe);
+            resultado.appendChild(foto);
+            resultado.appendChild(texto);
+            resultado.classList.add('visivel');
+        }
+
+        return { abrir, fechar, girarAte, total };
+    })();
+
     // Cada clique envia apenas o ID do proximo no. O perfil ativo fica na sessao PHP.
     document.querySelectorAll('[data-id-no-destino]').forEach((botao) => {
         botao.addEventListener('click', async () => {
             botao.disabled = true;
+
+            // Pokebola: a roleta abre em cima do mapa, sem sair da pagina.
+            const ehCaptura = botao.dataset.tipo === 'CAPTURA' && Roleta.total > 0;
+            if (ehCaptura) Roleta.abrir();
 
             const dados = new URLSearchParams();
             dados.set('id_no_destino', botao.dataset.idNoDestino);
@@ -1127,9 +1474,15 @@ $corPorTipo = static function (string $tipo): string {
                     throw new Error(resultado.mensagem || 'Nao foi possivel salvar o caminho.');
                 }
 
+                if (ehCaptura && resultado.captura) {
+                    await Roleta.girarAte(resultado.captura);
+                    return;
+                }
+
                 window.location.reload();
 
             } catch (erro) {
+                if (ehCaptura) Roleta.fechar();
                 alert(erro.message);
                 botao.disabled = false;
             }
@@ -1317,7 +1670,8 @@ $corPorTipo = static function (string $tipo): string {
         botao.addEventListener('click', async () => {
             const certeza = confirm(
                 'Reiniciar este perfil?\n\n' +
-                'Seu personagem e seus Pokémon (inclusive o inicial) serão apagados. ' +
+                'Seu personagem e seus Pokémon (inclusive o inicial) serão apagados, ' +
+                'e sua posição no mapa volta para o início. ' +
                 'Os outros perfis não são afetados.'
             );
             if (!certeza) return;
