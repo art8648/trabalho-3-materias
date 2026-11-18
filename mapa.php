@@ -1056,6 +1056,8 @@ $corPorTipo = static function (string $tipo): string {
 
         .topo-acoes { display: flex; gap: 10px; flex-wrap: wrap; }
         button.botao-menu { font: inherit; font-weight: bold; cursor: pointer; }
+        .botao-batalha { display: inline-block; margin-top: 8px; background: #f3d86c; }
+        .botao-batalha:hover { background: #ffe58a; }
         .botao-reiniciar:hover { background: #f6d3cb; }
         .botao-reiniciar:disabled { opacity: .5; cursor: wait; }
     </style>
@@ -1200,7 +1202,8 @@ $corPorTipo = static function (string $tipo): string {
         <section class="painel-inferior">
             <?php if (($tipoNoAtual === 'BATALHA' || $tipoNoAtual === 'CHEFE') && !$dados['batalha_vencida']): ?>
                 <strong>Você chegou a um ponto de batalha!</strong><br>
-                O caminho seguinte será liberado depois da vitória. A página de batalha será conectada na próxima etapa.
+                O caminho seguinte será liberado depois da vitória.<br>
+                <a class="botao-menu botao-batalha" href="batalha.php">⚔ Ir para a batalha</a>
             <?php elseif (($tipoNoAtual === 'BATALHA' || $tipoNoAtual === 'CHEFE') && $dados['batalha_vencida']): ?>
                 <strong>Batalha vencida!</strong><br>
                 Agora você pode escolher um dos próximos caminhos.
@@ -1476,6 +1479,12 @@ $corPorTipo = static function (string $tipo): string {
 
                 if (ehCaptura && resultado.captura) {
                     await Roleta.girarAte(resultado.captura);
+                    return;
+                }
+
+                // Mato, treinador ou chefe: segue direto para a tela de batalha.
+                if (resultado.no && (resultado.no.tipo_no === 'BATALHA' || resultado.no.tipo_no === 'CHEFE')) {
+                    window.location.href = 'batalha.php';
                     return;
                 }
 

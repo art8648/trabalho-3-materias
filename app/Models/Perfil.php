@@ -123,6 +123,16 @@ class Perfil
                 throw new DomainException('Perfil nao encontrado.');
             }
 
+            // Historico de batalhas: sem apagar, os pontos do mapa continuariam
+            // "vencidos" depois de reiniciar (o Mapa libera o caminho pela vitoria
+            // registrada no no). A ordem respeita as chaves estrangeiras; o
+            // log_batalha e apagado em cascata junto com a batalha.
+            foreach (['capture_attempts', 'area_concluida', 'batalha'] as $tabela) {
+                // Nomes de tabela fixos acima (nunca vindos do usuario).
+                $limparHistorico = $this->pdo->prepare("DELETE FROM $tabela WHERE id_perfil = :id_perfil");
+                $limparHistorico->execute(['id_perfil' => $idPerfil]);
+            }
+
             $apagar = $this->pdo->prepare('DELETE FROM pokemon_capturado WHERE id_perfil = :id_perfil');
             $apagar->execute(['id_perfil' => $idPerfil]);
 
