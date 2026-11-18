@@ -1187,12 +1187,12 @@ $corPorTipo = static function (string $tipo): string {
                 <span>MOCHILA</span>
             </a>
 
-            <div class="acesso-placeholder" aria-label="Espaco reservado para loja">
+            <a class="acesso-placeholder" href="loja.php" aria-label="Abrir loja e comprar itens">
                 <span class="acesso-icone" aria-hidden="true">🛒</span>
                 <span>LOJA</span>
-            </div>
+            </a>
 
-            <p class="acesso-legenda">Espaços reservados para as próximas etapas.</p>
+            <p class="acesso-legenda">Gerencie seus parceiros e compre suprimentos para a jornada.</p>
         </aside>
         </div>
 
