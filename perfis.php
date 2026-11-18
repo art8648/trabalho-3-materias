@@ -156,7 +156,7 @@ h1 {
 }
 
 .perfil {
-    width: 240px;
+    width: 400px;
     padding: 28px 20px 24px;
 
     display: flex;
@@ -190,8 +190,8 @@ h1 {
 }
 
 .avatar {
-    width: 92px;
-    height: 92px;
+    width: 130px;
+    height: 130px;
 
     display: grid;
     place-items: center;
