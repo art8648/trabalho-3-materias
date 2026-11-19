@@ -140,6 +140,12 @@ class Mochila
             if ($idLinha === false) {
                 throw new DomainException('Essa posicao ja esta vazia.');
             }
+            // O time nunca pode ficar sem Pokemon: o ultimo nao pode ir para a reserva.
+            $integrantes = $this->pdo->prepare('SELECT id FROM time_pokemon WHERE id_time = :time AND posicao BETWEEN 1 AND 5 FOR UPDATE');
+            $integrantes->execute(['time' => $idTime]);
+            if (count($integrantes->fetchAll(PDO::FETCH_COLUMN)) <= 1) {
+                throw new DomainException('O time precisa ter pelo menos um Pokemon.');
+            }
             $remover = $this->pdo->prepare('DELETE FROM time_pokemon WHERE id = :id AND id_time = :time');
             $remover->execute(['id' => $idLinha, 'time' => $idTime]);
             $this->pdo->commit();

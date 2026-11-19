@@ -83,6 +83,24 @@ $iconeItem = static function (string $tipo): string {
         default => '🎒',
     };
 };
+$imagemItem = static function (string $nome): string {
+    static $mapa = [
+        'Potion' => 'potion.jpg', 'Super Potion' => 'super_potion.webp',
+        'Hyper Potion' => 'hyper_potion.webp', 'Max Potion' => 'max_potion.webp',
+        'Full Restore' => 'full_restore.jpg', 'Antidote' => 'antidote.webp',
+        'Burn Heal' => 'burn_heal.webp', 'Ice Heal' => 'ice_heal.webp',
+        'Awakening' => 'awakening.webp', 'Paralyze Heal' => 'paralyze_heal.webp',
+        'Full Heal' => 'full_heal.webp', 'Revive' => 'revive.webp',
+        'Pedra Universal' => 'pedra_universal.png',
+    ];
+    return isset($mapa[$nome]) ? 'images/itens/' . $mapa[$nome] : '';
+};
+$iconeHtml = static function (array $item) use ($imagemItem, $iconeItem, $h): string {
+    $src = $imagemItem((string) $item['nome']);
+    return $src !== ''
+        ? '<img src="' . $h($src) . '" alt="' . $h($item['nome']) . '" loading="lazy">'
+        : $iconeItem((string) $item['tipo_efeito']);
+};
 $rotuloTipo = static function (string $tipo): string {
     return match ($tipo) {
         'CURA_HP', 'CURA_TOTAL', 'REVIVER' => 'Cura',
@@ -98,7 +116,13 @@ $rotuloTipo = static function (string $tipo): string {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Loja | Peakmon</title>
-<link rel="stylesheet" href="loja.css">
+<link rel="stylesheet" href="loja.css?v=<?= (int) @filemtime(__DIR__ . '/loja.css') ?>">
+<style>
+.item-icon { flex: none; width: 36px; height: 36px; display: grid; place-items: center; overflow: hidden; }
+.item-icon img { width: 36px; height: 36px; object-fit: contain; display: block; }
+.detail-icon { overflow: hidden; }
+.detail-icon img { width: 100%; height: 100%; padding: 6px; object-fit: contain; display: block; }
+</style>
 </head>
 <body>
 <div class="shell">
@@ -126,8 +150,9 @@ $rotuloTipo = static function (string $tipo): string {
                         data-id="<?= (int) $item['id'] ?>" data-nome="<?= $h($item['nome']) ?>"
                         data-descricao="<?= $h($item['descricao']) ?>" data-tipo="<?= $h($item['tipo_efeito']) ?>"
                         data-preco="<?= (int) $item['preco'] ?>" data-valor="<?= $h($item['valor_efeito'] ?? '') ?>"
-                        data-status="<?= $h($item['status_curado'] ?? '') ?>">
-                        <span class="item-icon"><?= $iconeItem((string) $item['tipo_efeito']) ?></span>
+                        data-status="<?= $h($item['status_curado'] ?? '') ?>"
+                        data-imagem="<?= $h($imagemItem((string) $item['nome'])) ?>">
+                        <span class="item-icon"><?= $iconeHtml($item) ?></span>
                         <span class="item-name"><?= $h($item['nome']) ?></span>
                         <span class="kind"><?= $h($rotuloTipo((string) $item['tipo_efeito'])) ?></span>
                         <span class="item-desc"><?= $h($item['descricao']) ?></span>
@@ -142,7 +167,7 @@ $rotuloTipo = static function (string $tipo): string {
             <h3 class="panel-title"><span>DETALHES DA COMPRA</span><span>INFO</span></h3>
             <div class="detail-inner" id="detalhes">
                 <?php if ($itens): ?>
-                <div class="detail-icon" id="icone"><?= $iconeItem((string) $itens[0]['tipo_efeito']) ?></div>
+                <div class="detail-icon" id="icone"><?= $iconeHtml($itens[0]) ?></div>
                 <div><h3 id="nome"><?= $h($itens[0]['nome']) ?></h3><p class="desc" id="descricao"><?= $h($itens[0]['descricao']) ?></p></div>
                 <div><span class="chip" id="categoria"><?= $h($rotuloTipo((string) $itens[0]['tipo_efeito'])) ?></span> <span class="chip" id="preco-unitario">Preco: <?= number_format((int) $itens[0]['preco'], 0, ',', '.') ?> P$</span></div>
                 <div><label class="label" for="quantidade">QUANTIDADE</label><div class="quantity-control"><button type="button" id="diminuir-quantidade" aria-label="Diminuir quantidade">−</button><input class="field" type="text" id="quantidade" inputmode="numeric" pattern="[0-9]*" autocomplete="off" value="1" aria-label="Quantidade"><button type="button" id="aumentar-quantidade" aria-label="Aumentar quantidade">+</button></div></div>
@@ -183,7 +208,16 @@ $rotuloTipo = static function (string $tipo): string {
         if (!card) return;
         cards.forEach(c => c.classList.toggle('selected', c === card));
         selecionado = {id:Number(card.dataset.id),nome:card.dataset.nome,descricao:card.dataset.descricao,tipo:card.dataset.tipo,preco:Number(card.dataset.preco)};
-        document.getElementById('icone').textContent = icones[selecionado.tipo] || '🎒';
+        const caixaIcone = document.getElementById('icone');
+        if (card.dataset.imagem) {
+            caixaIcone.innerHTML = '';
+            const imgEl = document.createElement('img');
+            imgEl.src = card.dataset.imagem;
+            imgEl.alt = selecionado.nome;
+            caixaIcone.appendChild(imgEl);
+        } else {
+            caixaIcone.textContent = icones[selecionado.tipo] || '🎒';
+        }
         document.getElementById('nome').textContent = selecionado.nome;
         document.getElementById('descricao').textContent = selecionado.descricao;
         document.getElementById('categoria').textContent = categorias[selecionado.tipo] || 'Outros';

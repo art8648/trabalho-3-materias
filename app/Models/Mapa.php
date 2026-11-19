@@ -9,6 +9,12 @@ use PDO;
 
 class Mapa
 {
+    /** Itens que podem ser achados nos pontos "Item escondido" (so consumiveis da loja). */
+    public const ITENS_ESCONDIDOS = [
+        'Potion', 'Super Potion', 'Antidote', 'Burn Heal',
+        'Ice Heal', 'Awakening', 'Paralyze Heal', 'Full Heal', 'Revive'
+    ];
+
     private PDO $pdo;
 
     public function __construct(PDO $pdo)
@@ -356,14 +362,39 @@ class Mapa
         }
     }
 
+    /** Itens da roleta do "Item escondido", na mesma ordem do sorteio (o navegador so desenha). */
+    public function listarRoletaItens(): array
+    {
+        $placeholders = implode(',', array_fill(0, count(self::ITENS_ESCONDIDOS), '?'));
+        $consulta = $this->pdo->prepare("SELECT id, nome, tipo_efeito FROM item WHERE ativo = TRUE AND nome IN ($placeholders)");
+        $consulta->execute(self::ITENS_ESCONDIDOS);
+
+        $porNome = [];
+        foreach ($consulta->fetchAll(PDO::FETCH_ASSOC) as $linha) {
+            $porNome[$linha['nome']] = $linha;
+        }
+
+        $lista = [];
+        foreach (self::ITENS_ESCONDIDOS as $nome) {
+            if (isset($porNome[$nome])) {
+                $lista[] = [
+                    'id' => (int) $porNome[$nome]['id'],
+                    'nome' => $porNome[$nome]['nome'],
+                    'tipo' => $porNome[$nome]['tipo_efeito']
+                ];
+            }
+        }
+
+        return $lista;
+    }
+
     /** Premia o jogador no proprio movimento, sem depender de um segundo POST. */
     private function entregarItemEscondido(int $idPerfil): array
     {
         // Somente consumiveis da loja; a Pedra Universal continua na loja / chefes.
-        $nomes = ['Potion', 'Super Potion', 'Antidote', 'Burn Heal',
-                  'Ice Heal', 'Awakening', 'Paralyze Heal', 'Full Heal', 'Revive'];
+        $nomes = self::ITENS_ESCONDIDOS;
         $placeholders = implode(',', array_fill(0, count($nomes), '?'));
-        $consulta = $this->pdo->prepare("SELECT id, nome FROM item WHERE ativo = TRUE AND nome IN ($placeholders)");
+        $consulta = $this->pdo->prepare("SELECT id, nome, tipo_efeito FROM item WHERE ativo = TRUE AND nome IN ($placeholders)");
         $consulta->execute($nomes);
         $itens = $consulta->fetchAll(PDO::FETCH_ASSOC);
         if ($itens === []) {
@@ -381,7 +412,12 @@ class Mapa
             VALUES (:inventario, :item, 1)
             ON DUPLICATE KEY UPDATE quantidade = quantidade + 1');
         $adicionar->execute(['inventario' => (int) $idInventario, 'item' => (int) $item['id']]);
-        return ['nome' => $item['nome'], 'quantidade' => 1];
+        return [
+            'id' => (int) $item['id'],
+            'nome' => $item['nome'],
+            'tipo' => $item['tipo_efeito'],
+            'quantidade' => 1
+        ];
     }
 
     /** Cura SOMENTE os integrantes do time ativo (slots de 1 a 5). */

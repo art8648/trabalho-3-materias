@@ -32,6 +32,15 @@ class Batalha
     /** Ao perder, o time e curado (Centro Pokemon) e o jogador pode tentar de novo. */
     public const CURAR_TIME_AO_PERDER = true;
 
+    /**
+     * Derrota total (todos os Pokemon do time desmaiaram): o perfil e reiniciado,
+     * igual ao botao "Reiniciar perfil" do mapa, e o jogador volta a selecao de personagem.
+     */
+    public const REINICIAR_PERFIL_AO_PERDER = true;
+
+    /** Para onde o navegador vai depois de uma derrota total. */
+    private const PAGINA_SELECAO = 'menu%20inicial/selecao.html';
+
     /** Chance (%) de golpe critico. */
     private const CHANCE_CRITICO = 6;
 
@@ -191,7 +200,10 @@ class Batalha
             ]);
 
             $timeCurado = false;
-            if (!$venceu && self::CURAR_TIME_AO_PERDER) {
+            $perdeuTudo = self::REINICIAR_PERFIL_AO_PERDER
+                && !$venceu
+                && count(array_filter($sim['jogador_final'], static fn (array $l): bool => $l['hp'] > 0)) === 0;
+            if (!$venceu && !$perdeuTudo && self::CURAR_TIME_AO_PERDER) {
                 $this->curarTime($idPerfil);
                 $timeCurado = true;
             }
@@ -223,6 +235,11 @@ class Batalha
             // Depois da luta o encontro some: vitoria libera o mapa, derrota sorteia outro.
             $this->descartarEncontro($idPerfil, $ctx['id_no']);
 
+            if ($perdeuTudo) {
+                $this->reiniciarPerfilPorDerrota($idPerfil, $idUsuario);
+                $dinheiroTotal = 0;
+            }
+
             return [
                 'sucesso' => true,
                 'resultado' => $sim['resultado'],
@@ -235,6 +252,8 @@ class Batalha
                 'area_concluida' => $areaConcluida,
                 'pedras' => $pedras,
                 'time_curado' => $timeCurado,
+                'perfil_reiniciado' => $perdeuTudo,
+                'redirecionar' => $perdeuTudo ? self::PAGINA_SELECAO : null,
             ];
         } catch (\Throwable $erro) {
             if ($this->pdo->inTransaction()) {
@@ -595,9 +614,14 @@ class Batalha
             $pedras = 0;
             $areaConcluida = false;
             $timeCurado = false;
+            $perdeuTudo = false;
 
             if ($acabou) {
                 $resultadoFinal = $estado['iI'] >= count($estado['inimigo']) ? 'VITORIA' : 'DERROTA';
+                // Derrota total = todo o time desmaiou (empate por limite de rodadas nao conta).
+                $perdeuTudo = self::REINICIAR_PERFIL_AO_PERDER
+                    && $resultadoFinal === 'DERROTA'
+                    && $estado['iJ'] >= count($estado['jogador']);
                 $eventos[] = [
                     'tipo' => 'fim', 'turno' => $estado['turno'], 'resultado' => $resultadoFinal,
                     'msg' => $resultadoFinal === 'VITORIA' ? 'Você venceu a batalha!' : 'Todos os seus Pokémon desmaiaram...',
@@ -614,7 +638,7 @@ class Batalha
                     WHERE id = :id AND resultado = 'EM_ANDAMENTO'");
                 $encerrar->execute(['resultado' => $resultadoFinal, 'ouro' => $ouro, 'id' => $estado['id_batalha']]);
                 if ($encerrar->rowCount() !== 1) throw new DomainException('Nao foi possivel finalizar a batalha.');
-                if ($resultadoFinal !== 'VITORIA' && self::CURAR_TIME_AO_PERDER) {
+                if ($resultadoFinal !== 'VITORIA' && !$perdeuTudo && self::CURAR_TIME_AO_PERDER) {
                     $this->curarTime($idPerfil);
                     $timeCurado = true;
                 }
@@ -634,6 +658,9 @@ class Batalha
             if ($acabou) {
                 unset($_SESSION['peakmon_batalha_interativa'][$idPerfil]);
                 $this->descartarEncontro($idPerfil, $estado['id_no']);
+                if ($perdeuTudo) {
+                    $this->reiniciarPerfilPorDerrota($idPerfil, $idUsuario);
+                }
             } else {
                 $_SESSION['peakmon_batalha_interativa'][$idPerfil] = $estado;
             }
@@ -646,12 +673,31 @@ class Batalha
                     'pedras' => $pedras,
                     'area_concluida' => $areaConcluida,
                     'time_curado' => $timeCurado,
+                    'perfil_reiniciado' => $perdeuTudo,
+                    'redirecionar' => $perdeuTudo ? self::PAGINA_SELECAO : null,
                 ];
+                if ($perdeuTudo) {
+                    $dados['dinheiro_total'] = 0;
+                }
             }
             return $dados;
         } catch (\Throwable $erro) {
             if ($this->pdo->inTransaction()) $this->pdo->rollBack();
             throw $erro;
+        }
+    }
+
+    /** Mesmo efeito do botao "Reiniciar perfil" do mapa.php (apaga o progresso so deste perfil). */
+    private function reiniciarPerfilPorDerrota(int $idPerfil, int $idUsuario): void
+    {
+        // Precisa rodar FORA de qualquer transacao: reiniciarEscolhas abre a propria.
+        (new Perfil($this->pdo))->reiniciarEscolhas($idPerfil, $idUsuario);
+
+        unset($_SESSION['peakmon_batalha_interativa'][$idPerfil], $_SESSION['peakmon_sinal'][$idPerfil]);
+        foreach (array_keys($_SESSION['peakmon_encontro'] ?? []) as $chave) {
+            if (str_starts_with((string) $chave, $idPerfil . ':')) {
+                unset($_SESSION['peakmon_encontro'][$chave]);
+            }
         }
     }
 

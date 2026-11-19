@@ -119,6 +119,32 @@ $iconeItem = static function (string $tipo): string {
         default => '🎒',
     };
 };
+$imagemItem = static function (string $nome): string {
+    static $mapa = [
+        'Potion' => 'potion.jpg', 'Super Potion' => 'super_potion.webp',
+        'Hyper Potion' => 'hyper_potion.webp', 'Max Potion' => 'max_potion.webp',
+        'Full Restore' => 'full_restore.jpg', 'Antidote' => 'antidote.webp',
+        'Burn Heal' => 'burn_heal.webp', 'Ice Heal' => 'ice_heal.webp',
+        'Awakening' => 'awakening.webp', 'Paralyze Heal' => 'paralyze_heal.webp',
+        'Full Heal' => 'full_heal.webp', 'Revive' => 'revive.webp',
+        'Pedra Universal' => 'pedra_universal.png',
+    ];
+    return isset($mapa[$nome]) ? 'images/itens/' . $mapa[$nome] : '';
+};
+$iconeHtml = static function (array $item) use ($imagemItem, $iconeItem, $h): string {
+    $src = $imagemItem((string) $item['nome']);
+    return $src !== ''
+        ? '<img src="' . $h($src) . '" alt="' . $h($item['nome']) . '" loading="lazy">'
+        : $iconeItem((string) $item['tipo_efeito']);
+};
+$classeTipo = static function (string $tipo): string {
+    return match ($tipo) {
+        'CURA_HP', 'CURA_TOTAL', 'REVIVER' => 'cat-cura',
+        'CURA_STATUS' => 'cat-status',
+        'PEDRA_EVOLUCAO' => 'cat-pedra',
+        default => '',
+    };
+};
 $rotuloTipo = static function (string $tipo): string {
     return match ($tipo) {
         'CURA_HP', 'CURA_TOTAL', 'REVIVER' => 'Cura',
@@ -139,7 +165,56 @@ $imagemPokemon = static function (array $pokemon) use ($h): string {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Mochila | Peakmon</title>
-<link rel="stylesheet" href="mochila.css">
+<link rel="stylesheet" href="mochila.css?v=<?= (int) @filemtime(__DIR__ . '/mochila.css') ?>">
+<style>
+/* Ícones dos itens (ficam aqui para valer mesmo se o mochila.css estiver em cache) */
+.item-icon { flex: none; width: 48px; height: 48px; display: grid; place-items: center; overflow: hidden; line-height: 1; }
+.item-icon img { width: 48px; height: 48px; object-fit: contain; display: block; }
+
+/* Quadradinho do painel de detalhes: a imagem fica dentro dele */
+.detail-icon { overflow: hidden; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.6); }
+.detail-icon img { width: 100%; height: 100%; padding: 6px; object-fit: contain; display: block; }
+
+/* Cor do painel grande de detalhes por tipo de item (o quadradinho continua branco) */
+
+/* CURA: potions, full restore, revive -> verde */
+.detail.cat-cura { background: linear-gradient(#3fb862, #1d7a3b); box-shadow: 0 0 0 3px #0f3d1f, inset 0 0 0 3px rgba(255, 255, 255, 0.2); }
+.detail.cat-cura .panel-title { background: #0f3d1f; }
+.detail.cat-cura .detail-inner h3 { text-shadow: 2px 2px 0 #0f3d1f; }
+.detail.cat-cura .detail-desc { color: #e9ffee; }
+.detail.cat-cura .field-label { color: #c8f5d3; }
+.detail.cat-cura .detail-icon { border-color: #0f3d1f; }
+
+/* STATUS: antidote, burn heal, ice heal, awakening, paralyze heal, full heal -> azul */
+.detail.cat-status { background: linear-gradient(#3fb4ee, #1d63c4); box-shadow: 0 0 0 3px #0e2a5c, inset 0 0 0 3px rgba(255, 255, 255, 0.2); }
+.detail.cat-status .panel-title { background: #0e2a5c; }
+.detail.cat-status .detail-inner h3 { text-shadow: 2px 2px 0 #0e2a5c; }
+.detail.cat-status .detail-desc { color: #eaf6ff; }
+.detail.cat-status .field-label { color: #cfe9ff; }
+.detail.cat-status .detail-icon { border-color: #0e2a5c; }
+
+/* PEDRA UNIVERSAL -> roxo escuro, mistico e meio sombrio, com brilho pulsando */
+.detail.cat-pedra {
+    background: radial-gradient(circle at 50% 18%, #6a24a8 0%, #2c0f4d 52%, #0c0518 100%);
+    border-color: #b98cff;
+    box-shadow: 0 0 0 3px #12051f, 0 0 22px 4px rgba(150, 70, 255, 0.6), inset 0 0 46px rgba(0, 0, 0, 0.65);
+    animation: pulso-mistico 3.2s ease-in-out infinite;
+}
+.detail.cat-pedra .panel-title { background: #12051f; border-bottom-color: rgba(185, 140, 255, 0.5); }
+.detail.cat-pedra .detail-inner h3 { text-shadow: 0 0 10px #b04cff, 2px 2px 0 #12051f; letter-spacing: 2px; }
+.detail.cat-pedra .detail-desc { color: #e6d3ff; }
+.detail.cat-pedra .field-label { color: #c9a8ff; }
+.detail.cat-pedra .meta-chip { background: rgba(230, 211, 255, 0.92); color: #2c0f4d; }
+.detail.cat-pedra .detail-icon { border-color: #12051f; box-shadow: 0 0 16px 3px rgba(190, 120, 255, 0.85); }
+/* A pedra tem fundo opaco: cobre o quadradinho inteiro, sem margem */
+.detail.cat-pedra .detail-icon img { padding: 0; object-fit: cover; }
+
+@keyframes pulso-mistico {
+    0%, 100% { box-shadow: 0 0 0 3px #12051f, 0 0 16px 2px rgba(150, 70, 255, 0.45), inset 0 0 46px rgba(0, 0, 0, 0.65); }
+    50%      { box-shadow: 0 0 0 3px #12051f, 0 0 32px 8px rgba(176, 76, 255, 0.85), inset 0 0 36px rgba(0, 0, 0, 0.55); }
+}
+@media (prefers-reduced-motion: reduce) { .detail.cat-pedra { animation: none; } }
+</style>
 </head>
 <body>
 <div class="shell">
@@ -173,9 +248,10 @@ $imagemPokemon = static function (array $pokemon) use ($h): string {
                                 data-tipo="<?= $h($item['tipo_efeito']) ?>"
                                 data-quantidade="<?= (int) $item['quantidade'] ?>"
                                 data-valor="<?= $h($item['valor_efeito'] ?? '') ?>"
-                                data-status="<?= $h($item['status_curado'] ?? '') ?>">
+                                data-status="<?= $h($item['status_curado'] ?? '') ?>"
+                                data-imagem="<?= $h($imagemItem((string) $item['nome'])) ?>">
                                 <span class="qty">x<?= (int) $item['quantidade'] ?></span>
-                                <span class="item-icon"><?= $iconeItem((string) $item['tipo_efeito']) ?></span>
+                                <span class="item-icon"><?= $iconeHtml($item) ?></span>
                                 <span class="item-name"><?= $h($item['nome']) ?></span>
                                 <span class="kind"><?= $h($rotuloTipo((string) $item['tipo_efeito'])) ?></span>
                                 <span class="item-desc"><?= $h($item['descricao']) ?></span>
@@ -186,11 +262,11 @@ $imagemPokemon = static function (array $pokemon) use ($h): string {
                 </div>
             </div>
 
-            <aside class="panel detail" aria-live="polite">
+            <aside class="panel detail <?= $itens ? $classeTipo((string) $itens[0]['tipo_efeito']) : '' ?>" id="painel-detalhe" aria-live="polite">
                 <h3 class="panel-title"><span>DETALHES DO ITEM</span><span>INFO</span></h3>
                 <div class="detail-inner" id="detalhe-item">
                     <?php if ($itens): ?>
-                        <div class="detail-icon" id="detalhe-icone"><?= $iconeItem((string) $itens[0]['tipo_efeito']) ?></div>
+                        <div class="detail-icon <?= $classeTipo((string) $itens[0]['tipo_efeito']) ?>" id="detalhe-icone"><?= $iconeHtml($itens[0]) ?></div>
                         <div><h3 id="detalhe-nome"><?= $h($itens[0]['nome']) ?></h3><p class="detail-desc" id="detalhe-descricao"><?= $h($itens[0]['descricao']) ?></p></div>
                         <div class="detail-meta"><span class="meta-chip" id="detalhe-quantidade">Quantidade: <?= (int) $itens[0]['quantidade'] ?></span><span class="meta-chip" id="detalhe-categoria"><?= $h($rotuloTipo((string) $itens[0]['tipo_efeito'])) ?></span></div>
                         <div id="acao-normal" class="<?= $itens[0]['tipo_efeito'] === 'PEDRA_EVOLUCAO' ? 'hidden' : '' ?>">
@@ -203,7 +279,7 @@ $imagemPokemon = static function (array $pokemon) use ($h): string {
                         </div>
                         <div id="acao-evolucao" class="<?= $itens[0]['tipo_efeito'] === 'PEDRA_EVOLUCAO' ? '' : 'hidden' ?>">
                             <label class="field-label" for="pokemon-evoluir">ESCOLHA O POKEMON</label>
-                            <select class="field" id="pokemon-evoluir"><option value="">Selecione um Pokemon</option><?php foreach ($todosPokemon as $pokemon): ?><option value="<?= (int) $pokemon['id_capturado'] ?>"><?= $h($pokemon['nome']) ?></option><?php endforeach; ?></select>
+                            <select class="field" id="pokemon-evoluir"><option value="">Selecione um Pokemon</option><?php foreach ($todosPokemon as $pokemon): ?><option value="<?= (int) $pokemon['id_capturado'] ?>" data-imagem="<?= $h($pokemon['imagem'] ?? '') ?>"><?= $h($pokemon['nome']) ?></option><?php endforeach; ?></select>
                             <label class="field-label" for="destino-evolucao" style="margin-top:10px">EVOLUCAO DISPONIVEL</label>
                             <select class="field" id="destino-evolucao" disabled><option value="">Primeiro selecione um Pokemon</option></select>
                             <button class="primary" id="botao-evoluir" type="button" style="width:100%;margin-top:10px" disabled>USAR PEDRA UNIVERSAL</button>
@@ -224,11 +300,11 @@ $imagemPokemon = static function (array $pokemon) use ($h): string {
                             <div class="pokemon-row">
                                 <span class="slot-number"><?= (int) $posicao ?></span><?= $imagemPokemon($pokemon) ?>
                                 <div class="pokemon-info"><strong><?= $h($pokemon['nome']) ?></strong><small><?= $h($pokemon['tipo']) ?> · <?= (int) $pokemon['hp_atual'] ?>/<?= (int) $pokemon['hp_max'] ?> HP<?php if ($pokemon['status_condicao']): ?> · <?= $h($pokemon['status_condicao']) ?><?php endif; ?><?php if ((bool) $pokemon['desmaiado']): ?> · <span class="status">DESMAIADO</span><?php endif; ?></small><div class="hp-track"><div class="hp-fill" style="width:<?= $hpPercent ?>%"></div></div></div>
-                                <button class="danger" type="button" data-enviar-reserva="<?= (int) $posicao ?>">RESERVA</button>
+                                <?php if (count(array_filter($equipe)) > 1): ?><button class="danger" type="button" data-enviar-reserva="<?= (int) $posicao ?>">RESERVA</button><?php endif; ?>
                             </div>
                         <?php else: ?><div class="slot-empty">POSICAO <?= (int) $posicao ?> · VAZIA</div><?php endif; ?>
                     <?php endforeach; ?>
-                </div><p class="hint">A equipe normal tem cinco espacos. O sexto fica reservado para a entrada especial de Rayquaza na historia.</p></div>
+                </div><p class="hint">A equipe normal tem cinco espacos. O sexto fica reservado para a entrada especial de Rayquaza na historia. O time precisa ter pelo menos um Pokemon.</p></div>
             </div>
 
             <div class="panel">
@@ -281,6 +357,7 @@ $imagemPokemon = static function (array $pokemon) use ($h): string {
     };
     const icones = {CURA_HP:'🧪',CURA_TOTAL:'🧪',CURA_STATUS:'💠',REVIVER:'✨',PEDRA_EVOLUCAO:'🔮'};
     const categorias = {CURA_HP:'Cura',CURA_TOTAL:'Cura',REVIVER:'Cura',CURA_STATUS:'Status',PEDRA_EVOLUCAO:'Evolucao'};
+    const classesCor = {CURA_HP:'cat-cura',CURA_TOTAL:'cat-cura',REVIVER:'cat-cura',CURA_STATUS:'cat-status',PEDRA_EVOLUCAO:'cat-pedra'};
     let itemSelecionado = null;
     const cards = [...document.querySelectorAll('.item-card')];
     const botaoUsar = document.getElementById('botao-usar');
@@ -292,7 +369,17 @@ $imagemPokemon = static function (array $pokemon) use ($h): string {
         if (!card) return;
         cards.forEach(c => c.classList.toggle('selected', c === card));
         itemSelecionado = {id:card.dataset.id, nome:card.dataset.nome, descricao:card.dataset.descricao, tipo:card.dataset.tipo, quantidade:card.dataset.quantidade};
-        document.getElementById('detalhe-icone').textContent = icones[itemSelecionado.tipo] || '🎒';
+        const caixaIcone = document.getElementById('detalhe-icone');
+        document.getElementById('painel-detalhe').className = 'panel detail ' + (classesCor[itemSelecionado.tipo] || '');
+        if (card.dataset.imagem) {
+            caixaIcone.innerHTML = '';
+            const imgEl = document.createElement('img');
+            imgEl.src = card.dataset.imagem;
+            imgEl.alt = itemSelecionado.nome;
+            caixaIcone.appendChild(imgEl);
+        } else {
+            caixaIcone.textContent = icones[itemSelecionado.tipo] || '🎒';
+        }
         document.getElementById('detalhe-nome').textContent = itemSelecionado.nome;
         document.getElementById('detalhe-descricao').textContent = itemSelecionado.descricao;
         document.getElementById('detalhe-quantidade').textContent = 'Quantidade: ' + itemSelecionado.quantidade;
@@ -360,18 +447,112 @@ $imagemPokemon = static function (array $pokemon) use ($h): string {
             const destino = document.getElementById('destino-evolucao');
             destino.innerHTML = '';
             if (!r.evolucoes.length) { destino.innerHTML = '<option value="">Nenhuma evolucao disponivel</option>'; return; }
-            destino.innerHTML = '<option value="">Selecione a evolucao</option>' + r.evolucoes.map(p => `<option value="${Number(p.id_destino)}">${String(p.pokemon_destino).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}</option>`).join('');
+            destino.innerHTML = '<option value="">Selecione a evolucao</option>' + r.evolucoes.map(p => `<option value="${Number(p.id_destino)}" data-imagem="${String(p.imagem_destino || '').replace(/"/g, '&quot;')}">${String(p.pokemon_destino).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}</option>`).join('');
             destino.disabled = false;
         } catch (e2) { toast(e2.message, true); }
     });
     document.getElementById('destino-evolucao')?.addEventListener('change', e => { botaoEvoluir.disabled = !e.target.value; });
+    // ===== Animacao de evolucao (rapida: termina em ~4,6 s; clicar encerra na hora) =====
+    function animarEvolucao(de, para) {
+        return new Promise((resolver) => {
+            const reduzir = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+            const overlay = document.createElement('div');
+            overlay.className = 'evo-overlay';
+            overlay.setAttribute('role', 'dialog');
+            overlay.setAttribute('aria-live', 'polite');
+
+            const palco = document.createElement('div');
+            palco.className = 'evo-palco';
+            const brilho = document.createElement('div');
+            brilho.className = 'evo-brilho';
+            const sprite = document.createElement('img');
+            sprite.className = 'evo-sprite';
+            sprite.onerror = () => { sprite.style.visibility = 'hidden'; };
+            const texto = document.createElement('p');
+            texto.className = 'evo-texto';
+
+            palco.appendChild(brilho);
+            palco.appendChild(sprite);
+            overlay.appendChild(palco);
+            overlay.appendChild(texto);
+            document.body.appendChild(overlay);
+
+            const mostrar = (info, silhueta) => {
+                sprite.style.visibility = 'visible';
+                sprite.src = info.imagem;
+                sprite.alt = info.nome;
+                sprite.classList.toggle('silhueta', silhueta);
+            };
+
+            const timers = [];
+            const agendar = (fn, ms) => timers.push(setTimeout(fn, ms));
+            let terminou = false;
+
+            const encerrar = () => {
+                if (terminou) return;
+                terminou = true;
+                timers.forEach(clearTimeout);
+                overlay.classList.add('saindo');
+                setTimeout(() => { overlay.remove(); resolver(); }, 220);
+            };
+            overlay.addEventListener('click', encerrar);
+
+            const revelar = () => {
+                overlay.classList.remove('flash');
+                mostrar(para, false);
+                sprite.classList.add('revelar');
+                overlay.classList.add('revelado');
+                texto.textContent = 'Parabéns! ' + de.nome + ' evoluiu para ' + para.nome + '!';
+            };
+
+            mostrar(de, false);
+            texto.textContent = 'O quê? ' + de.nome + ' está evoluindo!';
+
+            if (reduzir) {
+                // Sem piscadas: troca direto e fecha rapido.
+                agendar(revelar, 500);
+                agendar(encerrar, 1800);
+                return;
+            }
+
+            // Silhueta branca alternando entre a forma antiga e a nova, cada vez mais rapido.
+            const intervalos = [300, 260, 230, 200, 180, 160, 140, 130, 120, 110, 110, 110];
+            let tempo = 600;
+            let mostrandoNova = false;
+            agendar(() => { mostrar(de, true); overlay.classList.add('brilhando'); }, tempo);
+            intervalos.forEach((intervalo) => {
+                tempo += intervalo;
+                agendar(() => {
+                    mostrandoNova = !mostrandoNova;
+                    mostrar(mostrandoNova ? para : de, true);
+                }, tempo);
+            });
+
+            // Clarao branco e revelacao da nova forma (~2,9 s), com 1,5 s para admirar.
+            agendar(() => overlay.classList.add('flash'), tempo + 120);
+            agendar(revelar, tempo + 420);
+            agendar(encerrar, tempo + 420 + 1500);
+        });
+    }
+
     botaoEvoluir?.addEventListener('click', async () => {
         const capturado = document.getElementById('pokemon-evoluir').value;
         const destino = document.getElementById('destino-evolucao').value;
         if (!capturado || !destino) return toast('Escolha o Pokemon e a evolucao.', true);
         if (!confirm('Usar uma Pedra Universal para realizar esta evolucao?')) return;
         botaoEvoluir.disabled = true;
-        try { const r = await form('evoluir', {id_capturado:capturado, id_destino:destino}); toast(r.mensagem); setTimeout(() => location.reload(), 900); }
+        try {
+            const optOrigem = document.getElementById('pokemon-evoluir').selectedOptions[0];
+            const optDestino = document.getElementById('destino-evolucao').selectedOptions[0];
+            const de = { nome: optOrigem.textContent.trim(), imagem: optOrigem.dataset.imagem || '' };
+            const para = { nome: optDestino.textContent.trim(), imagem: optDestino.dataset.imagem || '' };
+
+            const r = await form('evoluir', {id_capturado:capturado, id_destino:destino});
+            await animarEvolucao(de, para);   // rapida: no maximo ~4,6 s
+            toast(r.mensagem);
+            setTimeout(() => location.reload(), 400);
+        }
         catch (e) { toast(e.message, true); botaoEvoluir.disabled = false; }
     });
 })();

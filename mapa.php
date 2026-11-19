@@ -6,6 +6,7 @@ use Peakmon\Models\Mapa;
 use Peakmon\Models\Time;
 use Peakmon\Models\Captura;
 use Peakmon\Models\Perfil;
+use Peakmon\Models\SinalEstranho;
 
 require_once __DIR__ . '/app/sessao.php';
 require_once __DIR__ . '/app/autoload.php';
@@ -35,6 +36,7 @@ $mostrarInicial = false;
 $iniciais = [];
 $slotsTime = [];
 $roleta = [];
+$roletaItens = [];
 
 try {
     $pdo = require __DIR__ . '/config/database.php';
@@ -42,6 +44,7 @@ try {
     $inicial = new Inicial($pdo);
     $time = new Time($pdo);
     $captura = new Captura($pdo);
+    $sinal = new SinalEstranho($pdo);
 
     // O mesmo arquivo recebe o clique do mapa e salva o novo ponto.
     if ($ehPost) {
@@ -118,6 +121,43 @@ try {
             ], JSON_UNESCAPED_UNICODE);
             exit;
         }
+        // ===== Evento "Sinal estranho": trocar um Pokemon por outro =====
+        // So funciona logo depois de chegar num ponto EVENTO (a sessao guarda esse aviso).
+        $acaoSinal = (string) ($_POST['acao'] ?? '');
+        if (in_array($acaoSinal, ['sinal_dados', 'sinal_trocar', 'sinal_ignorar'], true)) {
+            if ((int) ($_SESSION['peakmon_sinal'][$idPerfil] ?? 0) <= 0) {
+                throw new DomainException('Nenhum sinal estranho esta ativo agora.');
+            }
+
+            if ($acaoSinal === 'sinal_dados') {
+                echo json_encode([
+                    'sucesso' => true,
+                    'meus' => $sinal->listarDoJogador($idPerfil, $idUsuario),
+                    'especies' => $sinal->listarEspecies()
+                ], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+
+            if ($acaoSinal === 'sinal_ignorar') {
+                unset($_SESSION['peakmon_sinal'][$idPerfil]);
+                echo json_encode(['sucesso' => true, 'mensagem' => 'Voce ignorou o sinal.'], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+
+            $idCapturado = filter_var($_POST['id_capturado'] ?? null, FILTER_VALIDATE_INT);
+            $idNovaEspecie = filter_var($_POST['id_especie'] ?? null, FILTER_VALIDATE_INT);
+
+            if ($idCapturado === false || $idCapturado === null || $idNovaEspecie === false || $idNovaEspecie === null) {
+                throw new DomainException('Escolha o seu Pokemon e a especie nova.');
+            }
+
+            $resultadoTroca = $sinal->trocar($idPerfil, $idUsuario, (int) $idCapturado, (int) $idNovaEspecie);
+            unset($_SESSION['peakmon_sinal'][$idPerfil]);
+
+            echo json_encode(['sucesso' => true] + $resultadoTroca, JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
         // Nao deixa andar pelo mapa sem ter escolhido o inicial.
         if (!$inicial->perfilTemInicial($idPerfil)) {
             throw new DomainException('Escolha seu Pokemon inicial antes de avancar no mapa.');
@@ -137,6 +177,9 @@ try {
             exit;
         }
 
+        // Andar para outro ponto encerra qualquer sinal que ficou pendente.
+        unset($_SESSION['peakmon_sinal'][$idPerfil]);
+
         // Se o destino for uma Pokebola, o Captura sorteia o Pokemon na mesma transacao.
         $resultado = $mapa->avancar(
             $idPerfil,
@@ -144,6 +187,12 @@ try {
             (int) $idNoDestino,
             [$captura, 'capturarAleatorio']
         );
+
+        // Ponto EVENTO = "Sinal estranho": o navegador abre a escolha de troca.
+        if (($resultado['no']['tipo_no'] ?? '') === 'EVENTO') {
+            $_SESSION['peakmon_sinal'][$idPerfil] = (int) $resultado['no']['id'];
+            $resultado['evento'] = ['tipo' => 'SINAL_ESTRANHO'];
+        }
 
         echo json_encode($resultado, JSON_UNESCAPED_UNICODE);
         exit;
@@ -160,6 +209,26 @@ try {
     $dados = $mapa->carregarMapa($idPerfil, $idUsuario);
     // Pokemon que aparecem na roleta (so desenha; o sorteio e feito no servidor).
     $roleta = $captura->listarRoleta();
+    // Itens que aparecem na roleta do "Item escondido" (so desenha; o sorteio e no servidor).
+    $roletaItens = $mapa->listarRoletaItens();
+    // Sprite de cada item (as mesmas imagens da Mochila e da Loja, em images/itens/).
+    // Se o arquivo nao existir, a roleta cai de volta no emoji.
+    $arquivosItens = [
+        'Potion' => 'potion.jpg', 'Super Potion' => 'super_potion.webp',
+        'Hyper Potion' => 'hyper_potion.webp', 'Max Potion' => 'max_potion.webp',
+        'Full Restore' => 'full_restore.jpg', 'Antidote' => 'antidote.webp',
+        'Burn Heal' => 'burn_heal.webp', 'Ice Heal' => 'ice_heal.webp',
+        'Awakening' => 'awakening.webp', 'Paralyze Heal' => 'paralyze_heal.webp',
+        'Full Heal' => 'full_heal.webp', 'Revive' => 'revive.webp',
+        'Pedra Universal' => 'pedra_universal.png',
+    ];
+    foreach ($roletaItens as &$itemRoleta) {
+        $arquivo = $arquivosItens[$itemRoleta['nome']] ?? '';
+        $itemRoleta['imagem'] = ($arquivo !== '' && is_file(__DIR__ . '/images/itens/' . $arquivo))
+            ? 'images/itens/' . $arquivo
+            : '';
+    }
+    unset($itemRoleta);
 
 } catch (DomainException $erro) {
     if ($ehPost) {
@@ -222,6 +291,36 @@ $iconePorTipo = static function (string $tipo, string $codigo = ''): string {
     };
 };
 
+// Imagens dos pontos do mapa, em images/mapa/. A extensao (png, webp, jpg...) e descoberta no disco;
+// se a imagem nao existir, o emoji original continua aparecendo.
+$imagemMapa = static function (string $nome): string {
+    foreach ([$nome, str_replace(' ', '_', $nome)] as $base) {
+        foreach (['png', 'webp', 'jpg', 'jpeg', 'gif'] as $extensao) {
+            if (is_file(__DIR__ . '/images/mapa/' . $base . '.' . $extensao)) {
+                return 'images/mapa/' . rawurlencode($base) . '.' . $extensao;
+            }
+        }
+    }
+    return '';
+};
+$miniIcone = static function (string $arquivo, string $emoji, string $classe = 'legenda-img') use ($imagemMapa): string {
+    $src = $imagemMapa($arquivo);
+    return $src !== ''
+        ? '<img class="' . $classe . '" src="' . htmlspecialchars($src, ENT_QUOTES, 'UTF-8') . '" alt="" draggable="false">'
+        : $emoji;
+};
+$iconeNoHtml = static function (string $tipo, string $codigo = '') use ($iconePorTipo, $miniIcone): string {
+    $arquivo = match ($tipo) {
+        'BATALHA' => str_starts_with($codigo, 'TREINADOR') ? 'treinador' : 'mato',
+        'CAPTURA' => 'pokebola',
+        'CURA' => 'centro pokemon',
+        'EVENTO' => 'sinal_estranho',
+        default => '',
+    };
+    $emoji = $iconePorTipo($tipo, $codigo);
+    return $arquivo !== '' ? $miniIcone($arquivo, $emoji, 'no-img') : $emoji;
+};
+
 $idsProximos = [];
 $idNoAtual = null;
 $tipoNoAtual = null;
@@ -243,6 +342,11 @@ if ($dados !== null && $dados['progresso'] !== null) {
         }
     }
 }
+
+// Sinal estranho ainda nao resolvido neste ponto (ex.: a pagina foi recarregada).
+$sinalPendente = $idNoAtual !== null
+    && $tipoNoAtual === 'EVENTO'
+    && (int) ($_SESSION['peakmon_sinal'][$idPerfil] ?? 0) === $idNoAtual;
 
 $escapar = static function ($valor): string {
     return htmlspecialchars((string) $valor, ENT_QUOTES, 'UTF-8');
@@ -393,6 +497,22 @@ $corPorTipo = static function (string $tipo): string {
             font-size: 27px;
             cursor: default;
             filter: drop-shadow(1px 2px 0 rgba(0,0,0,.25));
+        }
+
+        .no-img {
+            width: 40px;
+            height: 40px;
+            object-fit: contain;
+            image-rendering: pixelated;
+            pointer-events: none;
+            user-select: none;
+        }
+        .legenda-img {
+            width: 20px;
+            height: 20px;
+            object-fit: contain;
+            image-rendering: pixelated;
+            vertical-align: middle;
         }
 
         button.no { cursor: pointer; }
@@ -850,6 +970,134 @@ $corPorTipo = static function (string $tipo): string {
         @media (prefers-reduced-motion: reduce) {
             .roleta-overlay { animation: none; }
             .roleta-resultado { transition: none; }
+        }
+
+        /* Emoji do item no aviso da roleta (no lugar da foto do Pokemon) */
+        .roleta-resultado .roleta-emoji {
+            width: 64px;
+            height: 64px;
+            flex: none;
+            display: grid;
+            place-items: center;
+            font-size: 34px;
+            border: 2px solid #34383a;
+            border-radius: 50%;
+            background: #f8f4e8;
+        }
+
+        /* ===== EVENTO: SINAL ESTRANHO (trocar um Pokemon por outro) ===== */
+
+        .sinal-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 125;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            overflow-y: auto;
+            background: rgba(3, 8, 10, 0.88);
+            backdrop-filter: blur(3px);
+            animation: roleta-aparecer 0.25s ease;
+        }
+
+        .sinal-overlay[hidden] { display: none; }
+
+        .sinal-dialogo {
+            width: min(94vw, 720px);
+            max-height: 94vh;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding: 16px 18px 18px;
+            color: #d6ffe9;
+            font-family: monospace;
+            text-align: center;
+            background: #0b1d1b;
+            border: 3px solid #3fe0a0;
+            box-shadow: 0 0 22px rgba(63, 224, 160, 0.35), 6px 6px 0 #000;
+        }
+
+        .sinal-topo {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 11px;
+            letter-spacing: 2px;
+            color: #7be8bd;
+        }
+
+        .sinal-chiado { animation: sinal-piscar 1.1s steps(2, end) infinite; color: #ffe27a; }
+
+        @keyframes sinal-piscar { 50% { opacity: 0.25; } }
+
+        .sinal-dialogo h2 { margin: 0; font-size: 22px; letter-spacing: 3px; text-transform: uppercase; }
+        .sinal-texto { margin: 0; min-height: 2.6em; font-size: 13px; line-height: 1.5; color: #bfeede; }
+        .sinal-erro { margin: 0; min-height: 1.3em; font-size: 13px; color: #ff9a9a; }
+
+        .sinal-busca {
+            width: 100%;
+            padding: 9px 10px;
+            color: #d6ffe9;
+            font: inherit;
+            background: #06100f;
+            border: 2px solid #3fe0a0;
+            outline: none;
+        }
+
+        .sinal-lista {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+            gap: 8px;
+            max-height: 44vh;
+            padding: 4px;
+            overflow-y: auto;
+        }
+
+        .sinal-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            padding: 8px 4px;
+            color: #d6ffe9;
+            font: inherit;
+            font-size: 12px;
+            background: #0f2a26;
+            border: 2px solid #2b6f5c;
+            cursor: pointer;
+        }
+
+        .sinal-card img { width: 56px; height: 56px; object-fit: contain; image-rendering: pixelated; }
+        .sinal-card small { color: #7fb8a5; font-size: 10px; }
+        .sinal-card:hover, .sinal-card:focus-visible { border-color: #3fe0a0; background: #14362f; outline: none; }
+        .sinal-card.escolhido { border-color: #ffe27a; background: #3a3414; box-shadow: 0 0 0 2px #ffe27a; }
+
+        .sinal-botoes { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+
+        .sinal-botao {
+            padding: 10px 18px;
+            color: #d6ffe9;
+            font: inherit;
+            font-size: 13px;
+            letter-spacing: 1px;
+            background: transparent;
+            border: 2px solid #3fe0a0;
+            cursor: pointer;
+        }
+
+        .sinal-botao:hover:not(:disabled) { background: #3fe0a0; color: #06100f; }
+        .sinal-botao:disabled { opacity: 0.35; cursor: not-allowed; }
+        .sinal-botao.discreto { border-color: #4c6b64; color: #9fc4b8; }
+
+        .sinal-resultado { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 10px 0; }
+        .sinal-resultado img { width: 120px; height: 120px; object-fit: contain; image-rendering: pixelated; }
+
+        .sinal-resultado[hidden], .sinal-lista[hidden], .sinal-busca[hidden], .sinal-botao[hidden] { display: none; }
+
+        @media (prefers-reduced-motion: reduce) {
+            .sinal-overlay { animation: none; }
+            .sinal-chiado { animation: none; }
         }
 
         /* ===== POP-UP: ESCOLHA DO POKEMON INICIAL ===== */
@@ -1562,7 +1810,7 @@ $corPorTipo = static function (string $tipo): string {
                     $proximo = in_array($idNo, $idsProximos, true);
                     $x = max(3, min(97, (int) $no['pos_x']));
                     $y = max(3, min(97, (int) $no['pos_y']));
-                    $icone = $iconePorTipo($no['tipo_no'], (string) $no['codigo']);
+                    $icone = $iconeNoHtml($no['tipo_no'], (string) $no['codigo']);
                     $tituloNo = $no['titulo'];
                     $descricaoNo = $no['descricao'] ?? '';
                 ?>
@@ -1630,8 +1878,8 @@ $corPorTipo = static function (string $tipo): string {
         </section>
 
         <section class="legenda">
-            🌿 Mato (Pokémon selvagem) &nbsp; 🥋 Treinador &nbsp; 🔴 Captura &nbsp; 🎁 Item<br>
-            🛒 Loja &nbsp; 🏥 Centro Pokémon &nbsp; 📡 Evento &nbsp; ⭐ Chefe
+            <?= $miniIcone('mato', '🌿') ?> Mato (Pokémon selvagem) &nbsp; <?= $miniIcone('treinador', '🥋') ?> Treinador &nbsp; <?= $miniIcone('pokebola', '🔴') ?> Captura &nbsp; 🎁 Item<br>
+            🛒 Loja &nbsp; <?= $miniIcone('centro pokemon', '🏥') ?> Centro Pokémon &nbsp; <?= $miniIcone('sinal_estranho', '📡') ?> Evento &nbsp; ⭐ Chefe
         </section>
         <?php endif; ?>
     </main>
@@ -1686,6 +1934,28 @@ $corPorTipo = static function (string $tipo): string {
     <div class="roleta-palco">
         <div class="roleta-seta" aria-hidden="true"></div>
         <svg class="roleta-roda" id="roleta-roda" viewBox="0 0 400 400" aria-hidden="true"></svg>
+    </div>
+</div>
+
+<div class="sinal-overlay" id="sinal-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="sinal-titulo">
+    <div class="sinal-dialogo">
+        <div class="sinal-topo">
+            <span>📡 PEAKMON • RECEPTOR</span>
+            <span class="sinal-chiado" id="sinal-chiado">SINAL INSTÁVEL</span>
+        </div>
+        <h2 id="sinal-titulo">Sinal estranho</h2>
+        <p class="sinal-texto" id="sinal-texto">Uma transmissão misteriosa oferece uma troca. Escolha qual dos seus Pokémon será trocado.</p>
+
+        <input class="sinal-busca" id="sinal-busca" type="search" placeholder="Procurar Pokémon..." autocomplete="off" hidden>
+        <div class="sinal-lista" id="sinal-lista"></div>
+        <div class="sinal-resultado" id="sinal-resultado" hidden></div>
+        <p class="sinal-erro" id="sinal-erro" role="alert"></p>
+
+        <div class="sinal-botoes">
+            <button type="button" class="sinal-botao discreto" id="sinal-voltar" hidden>Voltar</button>
+            <button type="button" class="sinal-botao" id="sinal-confirmar" hidden disabled>Trocar</button>
+            <button type="button" class="sinal-botao discreto" id="sinal-ignorar">Ignorar o sinal</button>
+        </div>
     </div>
 </div>
 
@@ -1799,15 +2069,24 @@ $corPorTipo = static function (string $tipo): string {
     // Pokemon da roleta de captura (o sorteio e feito no servidor; aqui so se desenha).
     const ROLETA = <?= json_encode($roleta, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
 
+    // Itens da roleta do "Item escondido" e emoji de cada tipo de item.
+    const ROLETA_ITENS = <?= json_encode($roletaItens, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+    const ICONES_ITEM = {CURA_HP: '🧪', CURA_TOTAL: '🧪', CURA_STATUS: '💠', REVIVER: '✨', PEDRA_EVOLUCAO: '🔮'};
+
+    // true quando a pagina abriu num ponto "Sinal estranho" que ainda nao foi resolvido.
+    const SINAL_PENDENTE = <?= $sinalPendente ? 'true' : 'false' ?>;
+
     // ===== Roleta de captura =====
     const Roleta = (function () {
         const overlay = document.getElementById('roleta-overlay');
         const roda = document.getElementById('roleta-roda');
         const sub = document.getElementById('roleta-sub');
         const resultado = document.getElementById('roleta-resultado');
-        const total = ROLETA.length;
-        const fatia = total > 0 ? 360 / total : 360;
-        let montada = false;
+        const tituloRoleta = document.getElementById('roleta-titulo');
+        // A mesma roda serve para Pokemon (captura) e para itens (item escondido).
+        let lista = ROLETA;
+        let total = lista.length;
+        let fatia = total > 0 ? 360 / total : 360;
         let podePular = false;
 
         const esperar = (ms) => new Promise((resolver) => setTimeout(resolver, ms));
@@ -1818,9 +2097,12 @@ $corPorTipo = static function (string $tipo): string {
             return [200 + raio * Math.sin(rad), 200 - raio * Math.cos(rad)];
         }
 
-        function montar() {
-            if (montada || total === 0) return;
-            montada = true;
+        function montar(novaLista) {
+            lista = novaLista;
+            total = lista.length;
+            fatia = total > 0 ? 360 / total : 360;
+            roda.replaceChildren();
+            if (total === 0) return;
 
             const NS = 'http://www.w3.org/2000/svg';
             const criar = (nome, atributos) => {
@@ -1829,7 +2111,7 @@ $corPorTipo = static function (string $tipo): string {
                 return elemento;
             };
 
-            ROLETA.forEach((pokemon, i) => {
+            lista.forEach((pokemon, i) => {
                 const inicio = i * fatia;
                 const fim = (i + 1) * fatia;
                 const meio = inicio + fatia / 2;
@@ -1846,14 +2128,26 @@ $corPorTipo = static function (string $tipo): string {
                 // Imagem e nome ficam num grupo girado para o meio da fatia.
                 const grupo = criar('g', { transform: 'rotate(' + meio + ' 200 200)' });
 
-                const imagem = criar('image', {
-                    href: pokemon.imagem,
-                    x: 200 - 20,
-                    y: 200 - 124 - 20,
-                    width: 40,
-                    height: 40
-                });
-                grupo.appendChild(imagem);
+                if (pokemon.imagem) {
+                    const imagem = criar('image', {
+                        href: pokemon.imagem,
+                        x: 200 - 20,
+                        y: 200 - 124 - 20,
+                        width: 40,
+                        height: 40
+                    });
+                    grupo.appendChild(imagem);
+                } else {
+                    // Item: sem foto, entra um emoji do tipo do item.
+                    const icone = criar('text', {
+                        x: 200,
+                        y: 200 - 116,
+                        'text-anchor': 'middle',
+                        'font-size': 32
+                    });
+                    icone.textContent = ICONES_ITEM[pokemon.tipo] || '🎁';
+                    grupo.appendChild(icone);
+                }
 
                 const nome = criar('text', {
                     x: 200,
@@ -1878,8 +2172,9 @@ $corPorTipo = static function (string $tipo): string {
             }));
         }
 
-        function abrir() {
-            montar();
+        function abrir(novaLista, textoTitulo) {
+            montar(novaLista || ROLETA);
+            tituloRoleta.textContent = textoTitulo || 'Pokébola!';
 
             roda.style.transition = 'none';
             roda.style.transform = 'rotate(0deg)';
@@ -1900,10 +2195,10 @@ $corPorTipo = static function (string $tipo): string {
         }
 
         // Gira ate parar no Pokemon que o servidor sorteou, mostra o aviso e recarrega o mapa.
-        async function girarAte(captura) {
-            let indice = ROLETA.findIndex((pokemon) => pokemon.id === captura.id_pokemon);
+        async function girarAte(premio, info) {
+            let indice = lista.findIndex((entrada) => entrada.id === premio.id);
             if (indice < 0) {
-                indice = ROLETA.findIndex((pokemon) => pokemon.nome === captura.nome);
+                indice = lista.findIndex((entrada) => entrada.nome === premio.nome);
             }
             if (indice < 0) {
                 window.location.reload();
@@ -1929,7 +2224,7 @@ $corPorTipo = static function (string $tipo): string {
             ]);
 
             sub.textContent = '';
-            mostrarResultado(captura);
+            mostrarResultado(info);
 
             // Fica um instante na tela; clicar acelera.
             podePular = true;
@@ -1942,39 +2237,253 @@ $corPorTipo = static function (string $tipo): string {
             window.location.reload();
         }
 
-        function mostrarResultado(captura) {
+        // info = { imagem | icone, alt, titulo, detalhe }
+        function mostrarResultado(info) {
             resultado.textContent = '';
 
-            const foto = document.createElement('img');
-            foto.src = captura.imagem;
-            foto.alt = captura.nome;
+            let marca;
+            if (info.imagem) {
+                marca = document.createElement('img');
+                marca.src = info.imagem;
+                marca.alt = info.alt || '';
+            } else {
+                marca = document.createElement('span');
+                marca.className = 'roleta-emoji';
+                marca.textContent = info.icone || '🎁';
+            }
 
             const texto = document.createElement('div');
             const titulo = document.createElement('strong');
-            titulo.textContent = 'Você capturou ' + captura.nome + '!';
+            titulo.textContent = info.titulo;
             const detalhe = document.createElement('span');
-            detalhe.textContent = captura.destino === 'time'
-                ? 'Ele entrou no seu time (posição ' + captura.posicao + ').'
-                : 'Seu time está cheio (5/5): ' + captura.nome + ' foi para o PC (Arquivo Bigolin, na Mochila).';
+            detalhe.textContent = info.detalhe;
 
             texto.appendChild(titulo);
             texto.appendChild(detalhe);
-            resultado.appendChild(foto);
+            resultado.appendChild(marca);
             resultado.appendChild(texto);
             resultado.classList.add('visivel');
         }
 
-        return { abrir, fechar, girarAte, total };
+        return { abrir, fechar, girarAte };
     })();
+
+    // ===== Evento "Sinal estranho": trocar um Pokemon por outro =====
+    const Sinal = (function () {
+        const overlay = document.getElementById('sinal-overlay');
+        const chiado = document.getElementById('sinal-chiado');
+        const texto = document.getElementById('sinal-texto');
+        const busca = document.getElementById('sinal-busca');
+        const listaEl = document.getElementById('sinal-lista');
+        const resultadoEl = document.getElementById('sinal-resultado');
+        const erroEl = document.getElementById('sinal-erro');
+        const botaoVoltar = document.getElementById('sinal-voltar');
+        const botaoConfirmar = document.getElementById('sinal-confirmar');
+        const botaoIgnorar = document.getElementById('sinal-ignorar');
+
+        let dados = null;          // { meus, especies } vindos do servidor
+        let meuEscolhido = null;   // Pokemon do jogador que sera trocado
+        let novoEscolhido = null;  // especie que ele vai receber
+
+        async function pedir(acao, extra) {
+            const corpo = new URLSearchParams();
+            corpo.set('acao', acao);
+            Object.keys(extra || {}).forEach((chave) => corpo.set(chave, extra[chave]));
+
+            const resposta = await fetch('mapa.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: corpo.toString()
+            });
+            const json = await resposta.json();
+
+            if (!resposta.ok || !json.sucesso) {
+                throw new Error(json.mensagem || 'Nao foi possivel concluir o sinal.');
+            }
+            return json;
+        }
+
+        function criarCard(pokemon, detalhe, aoClicar) {
+            const botao = document.createElement('button');
+            botao.type = 'button';
+            botao.className = 'sinal-card';
+
+            const foto = document.createElement('img');
+            foto.src = pokemon.imagem;
+            foto.alt = '';
+            foto.onerror = () => { foto.style.visibility = 'hidden'; };
+
+            const nome = document.createElement('span');
+            nome.textContent = pokemon.nome;
+
+            botao.appendChild(foto);
+            botao.appendChild(nome);
+
+            if (detalhe) {
+                const pequeno = document.createElement('small');
+                pequeno.textContent = detalhe;
+                botao.appendChild(pequeno);
+            }
+
+            botao.addEventListener('click', () => aoClicar(botao));
+            return botao;
+        }
+
+        // Passo 1: escolher qual Pokemon seu sera trocado.
+        function mostrarMeus() {
+            meuEscolhido = null;
+            novoEscolhido = null;
+            texto.textContent = 'Uma transmissão misteriosa oferece uma troca. Escolha qual dos seus Pokémon será trocado.';
+            busca.hidden = true;
+            busca.value = '';
+            botaoVoltar.hidden = true;
+            botaoConfirmar.hidden = true;
+            listaEl.hidden = false;
+            resultadoEl.hidden = true;
+            listaEl.textContent = '';
+
+            if (dados.meus.length === 0) {
+                texto.textContent = 'Você não tem nenhum Pokémon que possa participar da troca.';
+                return;
+            }
+
+            dados.meus.forEach((pokemon) => {
+                const lugar = pokemon.posicao ? 'Time ' + pokemon.posicao : 'Reserva';
+                listaEl.appendChild(criarCard(pokemon, lugar, () => {
+                    meuEscolhido = pokemon;
+                    mostrarNovos();
+                }));
+            });
+        }
+
+        // Passo 2: escolher a especie que ele vai receber.
+        function desenharNovos() {
+            const termo = busca.value.trim().toLowerCase();
+            listaEl.textContent = '';
+
+            dados.especies
+                .filter((especie) => especie.nome !== meuEscolhido.nome)
+                .filter((especie) => termo === '' || especie.nome.toLowerCase().includes(termo))
+                .forEach((especie) => {
+                    const card = criarCard(especie, especie.tipo, (elemento) => {
+                        novoEscolhido = especie;
+                        listaEl.querySelectorAll('.sinal-card').forEach((outro) => outro.classList.remove('escolhido'));
+                        elemento.classList.add('escolhido');
+                        texto.textContent = meuEscolhido.nome + ' será trocado por ' + especie.nome + '. Confirmar?';
+                        botaoConfirmar.disabled = false;
+                    });
+
+                    if (novoEscolhido && novoEscolhido.id === especie.id) card.classList.add('escolhido');
+                    listaEl.appendChild(card);
+                });
+        }
+
+        function mostrarNovos() {
+            novoEscolhido = null;
+            texto.textContent = 'Trocar ' + meuEscolhido.nome + ' por qual Pokémon? (Rayquaza, Deoxys e Arnaldo não entram na troca.)';
+            busca.hidden = false;
+            busca.value = '';
+            botaoVoltar.hidden = false;
+            botaoConfirmar.hidden = false;
+            botaoConfirmar.disabled = true;
+            desenharNovos();
+        }
+
+        function mostrarConclusao(r) {
+            listaEl.hidden = true;
+            busca.hidden = true;
+            botaoVoltar.hidden = true;
+            botaoConfirmar.hidden = true;
+            botaoIgnorar.hidden = true;
+            chiado.textContent = 'TROCA CONCLUÍDA';
+            texto.textContent = '';
+
+            resultadoEl.textContent = '';
+            const foto = document.createElement('img');
+            foto.src = r.imagem;
+            foto.alt = r.novo;
+            const titulo = document.createElement('strong');
+            titulo.textContent = r.antigo + ' virou ' + r.novo + '!';
+            const detalhe = document.createElement('span');
+            detalhe.textContent = r.destino === 'time'
+                ? r.novo + ' ocupou a posição ' + r.posicao + ' do seu time.'
+                : r.novo + ' ficou na reserva (Arquivo Bigolin, na Mochila).';
+
+            resultadoEl.appendChild(foto);
+            resultadoEl.appendChild(titulo);
+            resultadoEl.appendChild(detalhe);
+            resultadoEl.hidden = false;
+
+            // Clicar acelera; senao o mapa recarrega sozinho.
+            const recarregar = () => window.location.reload();
+            overlay.addEventListener('click', recarregar, { once: true });
+            setTimeout(recarregar, 3500);
+        }
+
+        busca.addEventListener('input', desenharNovos);
+        botaoVoltar.addEventListener('click', mostrarMeus);
+
+        botaoConfirmar.addEventListener('click', async () => {
+            if (!meuEscolhido || !novoEscolhido) return;
+
+            botaoConfirmar.disabled = true;
+            botaoIgnorar.disabled = true;
+            botaoVoltar.disabled = true;
+            erroEl.textContent = '';
+
+            try {
+                const r = await pedir('sinal_trocar', {
+                    id_capturado: meuEscolhido.id_capturado,
+                    id_especie: novoEscolhido.id
+                });
+                mostrarConclusao(r);
+            } catch (erro) {
+                erroEl.textContent = erro.message;
+                botaoConfirmar.disabled = false;
+                botaoIgnorar.disabled = false;
+                botaoVoltar.disabled = false;
+            }
+        });
+
+        botaoIgnorar.addEventListener('click', async () => {
+            botaoIgnorar.disabled = true;
+            try { await pedir('sinal_ignorar'); } catch (erro) { /* segue mesmo assim */ }
+            window.location.reload();
+        });
+
+        async function abrir() {
+            overlay.hidden = false;
+            document.body.classList.add('roleta-aberta'); // trava a rolagem do mapa
+            erroEl.textContent = '';
+            texto.textContent = 'Captando o sinal...';
+
+            try {
+                dados = await pedir('sinal_dados');
+                mostrarMeus();
+            } catch (erro) {
+                erroEl.textContent = erro.message;
+            }
+        }
+
+        return { abrir };
+    })();
+
+    // Pagina recarregada num ponto "Sinal estranho" ainda nao resolvido: reabre a escolha.
+    if (SINAL_PENDENTE) Sinal.abrir();
 
     // Cada clique envia apenas o ID do proximo no. O perfil ativo fica na sessao PHP.
     document.querySelectorAll('[data-id-no-destino]').forEach((botao) => {
         botao.addEventListener('click', async () => {
             botao.disabled = true;
 
-            // Pokebola: a roleta abre em cima do mapa, sem sair da pagina.
-            const ehCaptura = botao.dataset.tipo === 'CAPTURA' && Roleta.total > 0;
-            if (ehCaptura) Roleta.abrir();
+            // Pokebola e item escondido: a roleta abre em cima do mapa, sem sair da pagina.
+            const ehCaptura = botao.dataset.tipo === 'CAPTURA' && ROLETA.length > 0;
+            const ehItem = botao.dataset.tipo === 'ITEM' && ROLETA_ITENS.length > 0;
+            if (ehCaptura) Roleta.abrir(ROLETA, 'Pokébola!');
+            if (ehItem) Roleta.abrir(ROLETA_ITENS, 'Item escondido!');
 
             const dados = new URLSearchParams();
             dados.set('id_no_destino', botao.dataset.idNoDestino);
@@ -1996,7 +2505,31 @@ $corPorTipo = static function (string $tipo): string {
                 }
 
                 if (ehCaptura && resultado.captura) {
-                    await Roleta.girarAte(resultado.captura);
+                    const c = resultado.captura;
+                    await Roleta.girarAte({ id: c.id_pokemon, nome: c.nome }, {
+                        imagem: c.imagem,
+                        alt: c.nome,
+                        titulo: 'Você capturou ' + c.nome + '!',
+                        detalhe: c.destino === 'time'
+                            ? 'Ele entrou no seu time (posição ' + c.posicao + ').'
+                            : 'Seu time está cheio (5/5): ' + c.nome + ' foi para o PC (Arquivo Bigolin, na Mochila).'
+                    });
+                    return;
+                }
+                if (ehItem && resultado.item_encontrado) {
+                    const it = resultado.item_encontrado;
+                    const refItem = ROLETA_ITENS.find((x) => x.id === it.id) || {};
+                    await Roleta.girarAte({ id: it.id, nome: it.nome }, {
+                        imagem: refItem.imagem || '',
+                        alt: it.nome,
+                        icone: ICONES_ITEM[it.tipo] || '🎁',
+                        titulo: 'Você achou ' + it.nome + '!',
+                        detalhe: '+' + it.quantidade + ' guardado na sua Mochila.'
+                    });
+                    return;
+                }
+                if (resultado.evento && resultado.evento.tipo === 'SINAL_ESTRANHO') {
+                    await Sinal.abrir();
                     return;
                 }
                 if (resultado.item_encontrado) {
@@ -2019,7 +2552,7 @@ $corPorTipo = static function (string $tipo): string {
                 window.location.reload();
 
             } catch (erro) {
-                if (ehCaptura) Roleta.fechar();
+                if (ehCaptura || ehItem) Roleta.fechar();
                 alert(erro.message);
                 botao.disabled = false;
             }

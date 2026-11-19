@@ -954,6 +954,9 @@ if ($previa !== null) {
                 } else {
                     caixa.appendChild(criar('p', '', 'O caminho à frente foi liberado no mapa.'));
                 }
+            } else if (res.perfil_reiniciado) {
+                caixa.appendChild(criar('h2', '', '💀 Você perdeu!'));
+                caixa.appendChild(criar('p', '', 'Todos os seus Pokémon desmaiaram. Seu progresso neste perfil foi apagado e você vai voltar para a seleção de personagem.'));
             } else {
                 caixa.appendChild(criar('h2', '', 'Derrota'));
                 caixa.appendChild(criar('p', '', res.time_curado
@@ -966,6 +969,13 @@ if ($previa !== null) {
                 const continuar = criar('a', 'botao principal', 'Continuar');
                 continuar.href = 'mapa.php';
                 botoes.appendChild(continuar);
+            } else if (res.perfil_reiniciado) {
+                // Sem "tentar de novo": o perfil foi reiniciado, so resta recomecar.
+                const recomecar = criar('a', 'botao principal', 'Voltar à seleção de personagem');
+                recomecar.href = res.redirecionar || 'menu%20inicial/selecao.html';
+                botoes.appendChild(recomecar);
+                const voltarMapa = $('voltar-mapa');
+                if (voltarMapa) voltarMapa.hidden = true;
             } else {
                 const repetir = criar('a', 'botao principal', 'Tentar de novo');
                 repetir.href = 'batalha.php';
