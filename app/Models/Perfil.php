@@ -159,19 +159,22 @@ class Perfil
                 'id_usuario' => $idUsuario
             ]);
 
-            // Volta a posicao no mapa para o ponto INICIO da primeira area
-            // (o mapa usa uma unica area). So mexe no progresso deste perfil.
+            // Um reinicio verdadeiro deve bloquear novamente as areas seguintes.
+            // Remove o progresso das duas areas (somente do perfil ativo) e
+            // cria novamente o inicio da primeira area.
+            $apagarProgresso = $this->pdo->prepare('
+                DELETE FROM progresso_area WHERE id_perfil = :id_perfil
+            ');
+            $apagarProgresso->execute(['id_perfil' => $idPerfil]);
+
             $voltarAoInicio = $this->pdo->prepare("
-                UPDATE progresso_area pa
-                INNER JOIN area_no n
-                    ON n.id_area = pa.id_area
-                   AND n.tipo_no = 'INICIO'
-                SET pa.id_no_atual = n.id,
-                    pa.estado = 'DISPONIVEL'
-                WHERE pa.id_perfil = :id_perfil
-                  AND pa.id_area = (
-                      SELECT id FROM area_jogo ORDER BY ordem ASC LIMIT 1
-                  )
+                INSERT INTO progresso_area
+                    (id_perfil, id_area, id_no_atual, estado, data_inicio)
+                SELECT :id_perfil, a.id, n.id, 'DISPONIVEL', CURRENT_TIMESTAMP
+                FROM area_jogo a
+                INNER JOIN area_no n ON n.id_area = a.id AND n.tipo_no = 'INICIO'
+                ORDER BY a.ordem ASC
+                LIMIT 1
             ");
             $voltarAoInicio->execute(['id_perfil' => $idPerfil]);
 

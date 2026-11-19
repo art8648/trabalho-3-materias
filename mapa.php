@@ -70,6 +70,10 @@ try {
             exit;
         }
 
+        // Nao troca integrantes de uma equipe enquanto a luta guarda seu estado.
+        if (($_POST['acao'] ?? '') === 'mover_time' && !empty($_SESSION['peakmon_batalha_interativa'][$idPerfil])) {
+            throw new DomainException('Termine a batalha atual antes de mudar a equipe.');
+        }
         // Painel TIME: troca dois Pokemon de posicao (ou move para uma posicao vazia).
         if (($_POST['acao'] ?? '') === 'mover_time') {
             $de = filter_var($_POST['de'] ?? null, FILTER_VALIDATE_INT);
@@ -95,6 +99,13 @@ try {
         // Botao REINICIAR: apaga o inicial e o personagem SO do perfil ativo.
         if (($_POST['acao'] ?? '') === 'reiniciar_perfil') {
             (new Perfil($pdo))->reiniciarEscolhas($idPerfil, $idUsuario);
+            // Uma batalha em andamento pode estar na sessao: descartar ao zerar o save.
+            unset($_SESSION['peakmon_batalha_interativa'][$idPerfil]);
+            foreach (array_keys($_SESSION['peakmon_encontro'] ?? []) as $chave) {
+                if (str_starts_with((string) $chave, $idPerfil . ':')) {
+                    unset($_SESSION['peakmon_encontro'][$chave]);
+                }
+            }
 
             // O reinicio tambem deve devolver o saldo do perfil a zero.
             $zerarSaldo = $pdo->prepare('UPDATE perfil SET dinheiro = 0 WHERE id = :perfil');
@@ -138,17 +149,17 @@ try {
         exit;
     }
 
-    // O time e carregado primeiro: o painel aparece mesmo que o mapa falhe.
-    $slotsTime = $time->listar($idPerfil);
-    $dados = $mapa->carregarMapa($idPerfil, $idUsuario);
-    // Pokemon que aparecem na roleta (so desenha; o sorteio e feito no servidor).
-    $roleta = $captura->listarRoleta();
-
-    // Perfil sem Pokemon ainda: o pop-up de escolha aparece em cima do mapa.
+    // O modal do inicial precisa ser preparado ANTES do mapa.
+    // Assim, uma falha no carregamento dos nos nao esconde a escolha.
     if (!$inicial->perfilTemInicial($idPerfil)) {
         $iniciais = $inicial->listar();
         $mostrarInicial = count($iniciais) > 0;
     }
+
+    $slotsTime = $time->listar($idPerfil);
+    $dados = $mapa->carregarMapa($idPerfil, $idUsuario);
+    // Pokemon que aparecem na roleta (so desenha; o sorteio e feito no servidor).
+    $roleta = $captura->listarRoleta();
 
 } catch (DomainException $erro) {
     if ($ehPost) {
@@ -293,6 +304,21 @@ $corPorTipo = static function (string $tipo): string {
         .informacao strong { color: #385b43; }
         .botao-menu { color: #20252a; text-decoration: none; font-weight: bold; }
         .botao-menu:hover { background: #d9efd5; }
+
+        .indice-area {
+            width: fit-content;
+            max-width: calc(100% - 24px);
+            margin: 13px auto 0;
+            padding: 6px 14px;
+            background: #132d4a;
+            border: 2px solid #081629;
+            box-shadow: 3px 3px 0 #6a90a2;
+            color: #b8ffda;
+            text-align: center;
+            font-size: 11px;
+            font-weight: 900;
+            letter-spacing: 1.4px;
+        }
 
         h1 {
             text-align: center;
@@ -881,6 +907,385 @@ $corPorTipo = static function (string $tipo): string {
 
         /* CARD */
 
+        /* Centro Pokémon — painel com máquina de cura em estilo pixel-art. */
+        .cura-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 2500;
+            display: grid;
+            place-items: center;
+            padding: 18px;
+            overflow-y: auto;
+            background:
+                radial-gradient(ellipse at 50% 36%, rgba(48, 157, 181, .22), transparent 55%),
+                rgba(5, 13, 29, .90);
+            backdrop-filter: blur(9px);
+        }
+        .cura-overlay[hidden] { display: none; }
+        .cura-dialogo {
+            width: min(95vw, 540px);
+            padding: 22px 24px;
+            background: #f4f8f9;
+            border: 4px solid #233d56;
+            box-shadow: 8px 8px 0 #071522;
+            text-align: center;
+            color: #193650;
+        }
+        .cura-dialogo h2 { margin: 4px 0 8px; }
+        .cura-dialogo p { margin: 8px 0 15px; line-height: 1.5; }
+        .cura-fechar {
+            padding: 11px 22px;
+            font: bold 15px monospace;
+            color: #12304a;
+            background: #b9f6d8;
+            border: 3px solid #294e69;
+            cursor: pointer;
+        }
+        .cura-fechar:disabled { opacity: .55; cursor: not-allowed; }
+
+        #cura-overlay .cura-dialogo {
+            position: relative;
+            width: min(95vw, 570px);
+            padding: 0 22px 24px;
+            overflow: hidden;
+            color: #eaf9ff;
+            background:
+                linear-gradient(135deg, transparent 0 49%, rgba(255,255,255,.025) 50% 51%, transparent 52%) 0 0 / 27px 27px,
+                linear-gradient(180deg, #172c4b 0%, #101f36 100%);
+            border: 4px solid #09182a;
+            outline: 2px solid #517c97;
+            outline-offset: -9px;
+            box-shadow: 0 20px 70px rgba(0,0,0,.55), 9px 10px 0 #050e1c;
+        }
+        .cura-topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin: 0 -22px 20px;
+            padding: 10px 20px;
+            border-bottom: 3px solid #09182a;
+            background: #e6516b;
+            box-shadow: inset 0 -4px #a72c4d;
+            color: #fff9f2;
+            font-size: 11px;
+            font-weight: 900;
+            letter-spacing: 1.4px;
+        }
+        .cura-topbar .cura-simbolo {
+            display: inline-grid;
+            place-items: center;
+            width: 27px;
+            height: 27px;
+            background: #fff;
+            border: 3px solid #9a2944;
+            color: #ce3954;
+            font-size: 21px;
+            line-height: 1;
+            box-shadow: 2px 2px 0 #9a2944;
+        }
+        .cura-topbar .cura-online {
+            color: #d7fff5;
+            font-size: 10px;
+            letter-spacing: .5px;
+            white-space: nowrap;
+        }
+        .cura-topbar .cura-online::before {
+            content: "";
+            display: inline-block;
+            width: 7px;
+            height: 7px;
+            margin-right: 6px;
+            background: #89ffbf;
+            box-shadow: 0 0 8px #7af5ad;
+        }
+        #cura-overlay .cura-etiqueta {
+            margin: 0;
+            color: #75dfe5;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 3px;
+        }
+        #cura-overlay h2 {
+            margin: 7px 0 7px;
+            color: #fff;
+            font-size: clamp(23px, 4vw, 30px);
+            letter-spacing: .8px;
+            text-shadow: 3px 3px 0 #071323;
+        }
+        #cura-overlay .cura-intro {
+            margin: 0;
+            font-size: 12px;
+            color: #b9cedd;
+        }
+        .cura-cenario {
+            position: relative;
+            margin: 20px auto 12px;
+            padding: 6px 12px 15px;
+            max-width: 480px;
+            background:
+                radial-gradient(ellipse at 50% 90%, rgba(77,231,202,.15), transparent 63%),
+                linear-gradient(180deg, #132e48, #183b56 67%, #203950 67%);
+            border: 3px solid #09182a;
+            box-shadow: inset 0 0 0 3px #294860, 0 5px 0 #060e19;
+        }
+        .cura-cenario::before, .cura-cenario::after {
+            content: "✦";
+            position: absolute;
+            color: #63efd7;
+            font-size: 17px;
+            opacity: .7;
+            text-shadow: 0 0 15px #74ffdf;
+        }
+        .cura-cenario::before { top: 24%; left: 7%; }
+        .cura-cenario::after { right: 7%; bottom: 27%; font-size: 13px; }
+        .cura-maquina {
+            position: relative;
+            z-index: 1;
+            width: min(100%, 392px);
+            margin: 18px auto 0;
+            background: #f4ecdf;
+            border: 5px solid #14253e;
+            border-radius: 18px 18px 7px 7px;
+            box-shadow: inset 5px 0 #fff8ee, inset -7px 0 #bfc7d0, 6px 7px 0 #09172a;
+        }
+        .cura-coroa {
+            position: relative;
+            min-height: 56px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 12px;
+            margin: -5px -5px 0;
+            border: 5px solid #14253e;
+            border-radius: 17px 17px 5px 5px;
+            background: linear-gradient(180deg, #ff8a92 0 12%, #f05870 12% 70%, #bd2d54 70%);
+            box-shadow: inset 5px 0 #ffb4b6, inset -6px 0 #a9244d;
+        }
+        .cura-cruz {
+            display: grid;
+            place-items: center;
+            width: 31px;
+            height: 31px;
+            border-radius: 5px;
+            background: #fff9f2;
+            border: 3px solid #ad304e;
+            color: #ea4c6b;
+            font-size: 26px;
+            line-height: 1;
+            font-weight: 900;
+        }
+        .cura-marca {
+            color: #fff2ed;
+            font-size: 11px;
+            letter-spacing: 2px;
+            font-weight: bold;
+            text-shadow: 2px 2px #9a2548;
+        }
+        .cura-monitor {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            align-items: center;
+            gap: 8px;
+            margin: 12px 19px 8px;
+            padding: 7px 9px;
+            min-height: 35px;
+            background: #102943;
+            border: 3px solid #576d86;
+            box-shadow: inset 0 0 12px #031327, 2px 2px 0 #a7b3c4;
+        }
+        .cura-monitor-texto {
+            min-width: 0;
+            color: #74ffe2;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 1.5px;
+            text-align: left;
+            white-space: nowrap;
+            overflow: hidden;
+        }
+        .cura-visores { display: flex; gap: 5px; justify-content: flex-end; }
+        .cura-led {
+            width: 10px;
+            height: 10px;
+            border: 2px solid #36576f;
+            background: #406179;
+        }
+        .cura-led.aceso {
+            background: #9effdc;
+            box-shadow: 0 0 8px 2px #59e4d0;
+        }
+        .cura-bandeja {
+            min-height: 94px;
+            margin: 12px 19px;
+            padding: 16px 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: clamp(5px, 2vw, 11px);
+            background:
+                repeating-linear-gradient(90deg, transparent 0 26px, rgba(141,205,223,.045) 27px 29px),
+                linear-gradient(#102c44, #1b4561);
+            border: 4px solid #758ca1;
+            border-radius: 7px;
+            box-shadow: inset 0 6px 10px #071a30, 0 3px #c0c9d2;
+        }
+        .cura-bola {
+            position: relative;
+            display: block;
+            flex: 0 0 auto;
+            width: clamp(36px, 8.2vw, 53px);
+            height: clamp(36px, 8.2vw, 53px);
+            border: 4px solid #132338;
+            border-radius: 50%;
+            background: linear-gradient(#fa4b64 0 44%, #162439 45% 55%, #f8faf6 56% 100%);
+            box-shadow: inset -4px -5px #0002, inset 3px 2px #fff7, 0 4px 0 #071727;
+        }
+        .cura-bola::before {
+            content: "";
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: 26%;
+            aspect-ratio: 1;
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+            border: 3px solid #132338;
+            background: #fbffff;
+            box-shadow: 0 0 0 2px #d2e2e5;
+        }
+        .cura-bola::after {
+            content: "✦";
+            position: absolute;
+            top: -13px;
+            right: -9px;
+            color: #9fffe3;
+            font-size: 17px;
+            opacity: 0;
+            text-shadow: 0 0 12px #74ffdf;
+        }
+        .cura-base {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 0 19px 14px;
+            color: #395675;
+            font-size: 10px;
+            font-weight: 900;
+            letter-spacing: 1px;
+        }
+        .cura-base .cura-detalhes {
+            width: 66px;
+            height: 10px;
+            background: repeating-linear-gradient(90deg, #526d84 0 8px, transparent 8px 13px);
+        }
+        .cura-informacoes {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            gap: 5px 12px;
+            color: #abd6e5;
+            font-size: 10px;
+            font-weight: bold;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+        .cura-informacoes strong { color: #9bffe4; }
+        .cura-barra {
+            margin: 9px 0 12px;
+            height: 12px;
+            background: #06172b;
+            border: 2px solid #42617d;
+            overflow: hidden;
+        }
+        .cura-barra span {
+            display: block;
+            width: 0;
+            height: 100%;
+            background: repeating-linear-gradient(90deg, #53d3b5 0 16px, #85f3d7 16px 20px);
+            box-shadow: 0 0 15px #84f8d8;
+        }
+        .cura-overlay.curando .cura-bola {
+            animation: cura-rodar 1.05s linear infinite, cura-brilhar 1.05s ease-in-out infinite;
+            animation-delay: calc(var(--i) * 110ms);
+        }
+        .cura-overlay.curando .cura-bola::after {
+            animation: cura-faisca .7s ease-in-out infinite alternate;
+            animation-delay: calc(var(--i) * 100ms);
+        }
+        .cura-overlay.curando .cura-barra span { animation: cura-progresso 3.1s ease-in-out forwards; }
+        .cura-overlay.curando .cura-led { animation: cura-led-pulso .8s ease-in-out infinite alternate; }
+        .cura-overlay.concluido .cura-bola {
+            box-shadow: 0 0 16px 5px #79f6d0, inset -4px -5px #0002;
+        }
+        .cura-overlay.concluido .cura-barra span { width: 100%; }
+        .cura-overlay.concluido .cura-monitor-texto { color: #baffdf; }
+        #cura-overlay .cura-status {
+            min-height: 30px;
+            margin: 0 0 17px;
+            color: #dbf7f6;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        #cura-overlay .cura-fechar {
+            width: min(100%, 310px);
+            min-height: 45px;
+            background: #9af5d7;
+            color: #112d3e;
+            border: 3px solid #061d2b;
+            box-shadow: 4px 4px 0 #060f1e;
+            font: 900 12px monospace;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            transition: transform .12s, box-shadow .12s, background .12s;
+        }
+        #cura-overlay .cura-fechar:hover:not(:disabled) {
+            transform: translate(2px, 2px);
+            box-shadow: 2px 2px 0 #060f1e;
+            background: #c0ffe8;
+        }
+        #cura-overlay .cura-fechar:focus-visible {
+            outline: 3px solid #fff;
+            outline-offset: 5px;
+        }
+        @keyframes cura-rodar {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        @keyframes cura-brilhar {
+            50% { filter: brightness(1.4); box-shadow: 0 0 17px 6px #79f5d8; }
+        }
+        @keyframes cura-faisca {
+            to { opacity: 1; transform: translate(2px, -8px); }
+        }
+        @keyframes cura-led-pulso {
+            50% { filter: brightness(1.8); box-shadow: 0 0 11px #81ffda; }
+        }
+        @keyframes cura-progresso {
+            0% { width: 0; }
+            40% { width: 45%; }
+            75% { width: 77%; }
+            100% { width: 100%; }
+        }
+        @media (max-width: 470px) {
+            #cura-overlay .cura-dialogo { padding: 0 12px 17px; }
+            .cura-topbar { margin: 0 -12px 17px; padding: 9px 12px; }
+            .cura-cenario { padding: 4px 6px 12px; }
+            .cura-maquina { width: 100%; }
+            .cura-monitor, .cura-bandeja, .cura-base { margin-left: 9px; margin-right: 9px; }
+            .cura-bola { border-width: 3px; }
+            .cura-bola::before { border-width: 2px; }
+            .cura-topbar .cura-online { font-size: 8px; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .cura-overlay.curando .cura-bola,
+            .cura-overlay.curando .cura-bola::after,
+            .cura-overlay.curando .cura-led,
+            .cura-overlay.curando .cura-barra span { animation: none; }
+            .cura-overlay.curando .cura-barra span { width: 100%; }
+        }
+
         .inicial-card {
             --cor: 255, 255, 255;
 
@@ -939,21 +1344,17 @@ $corPorTipo = static function (string $tipo): string {
             pointer-events: none;
         }
 
-        .inicial-card:hover,
-        .inicial-card:focus-visible {
-            transform: scale(1.08);
-            border-color: rgba(255, 255, 255, 0.85);
-            box-shadow:
-                0 0 10px rgba(var(--cor), 0.45),
-                0 0 25px rgba(var(--cor), 0.2);
-            outline: none;
+        /* Hover indica que o card pode ser clicado, SEM parecer selecionado.
+           O brilho e a cor fortes ficam exclusivos da classe .selecionado. */
+        .inicial-card:hover:not(.selecionado),
+        .inicial-card:focus-visible:not(.selecionado) {
+            transform: translateY(-4px);
+            border-color: #6f7a85;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, .35);
         }
-
-        .inicial-card:hover::before,
-        .inicial-card:focus-visible::before {
-            opacity: 1;
-            filter: grayscale(0%);
-            transform: scale(1.08);
+        .inicial-card:focus-visible {
+            outline: 2px solid #fff;
+            outline-offset: 4px;
         }
 
         .inicial-card.selecionado {
@@ -1078,6 +1479,13 @@ $corPorTipo = static function (string $tipo): string {
         <button type="button" class="botao-menu botao-reiniciar" id="botao-reiniciar">↻ Reiniciar perfil</button>
     </div>
 </header>
+
+<?php if ($mapaPronto): ?>
+    <p class="indice-area">
+        ÁREA <?= str_pad((string) (int) $dados['area']['ordem'], 2, '0', STR_PAD_LEFT) ?>
+        • DESAFIO FINAL: <?= $escapar($dados['area']['chefe_nome']) ?>
+    </p>
+<?php endif; ?>
 
 <h1>
     <?= $dados !== null && $dados['area'] !== null
@@ -1232,7 +1640,7 @@ $corPorTipo = static function (string $tipo): string {
     <div class="inicial-overlay" id="inicial-overlay" role="dialog" aria-modal="true" aria-labelledby="inicial-titulo">
         <div class="inicial-modal">
 
-            <h2 id="inicial-titulo">Escolha seu inicial</h2>
+            <h2 id="inicial-titulo" tabindex="-1">Escolha seu inicial</h2>
             <p class="inicial-subtitulo">ESTE SERÁ SEU PRIMEIRO PARCEIRO NA JORNADA</p>
 
             <div class="inicial-lista">
@@ -1281,7 +1689,113 @@ $corPorTipo = static function (string $tipo): string {
     </div>
 </div>
 
+<div class="cura-overlay" id="cura-overlay" hidden role="dialog" aria-modal="true"
+     aria-labelledby="cura-titulo" aria-describedby="cura-status">
+    <div class="cura-dialogo">
+        <div class="cura-topbar">
+            <span class="cura-simbolo" aria-hidden="true">+</span>
+            <span>PEAKMON • HEALTH SYSTEM</span>
+            <span class="cura-online">ONLINE</span>
+        </div>
+        <p class="cura-etiqueta">ESTAÇÃO DE RECUPERAÇÃO</p>
+        <h2 id="cura-titulo">Centro Pokémon</h2>
+        <p class="cura-intro">Sua equipe está em boas mãos. Preparando a máquina...</p>
+        <div class="cura-cenario">
+            <div class="cura-maquina" aria-hidden="true">
+                <div class="cura-coroa">
+                    <span class="cura-cruz">+</span>
+                    <span class="cura-marca">HEALING UNIT / 01</span>
+                </div>
+                <div class="cura-monitor">
+                    <span class="cura-monitor-texto" id="cura-monitor-texto">RECUPERAÇÃO EM ESPERA</span>
+                    <div class="cura-visores">
+                        <span class="cura-led"></span><span class="cura-led"></span><span class="cura-led"></span>
+                    </div>
+                </div>
+                <div class="cura-bandeja" id="cura-bandeja"></div>
+                <div class="cura-base">
+                    <span>POKÉBALL SCANNER</span>
+                    <span class="cura-detalhes"></span>
+                </div>
+            </div>
+        </div>
+        <div class="cura-informacoes">
+            <span>EQUIPE ATIVA: <strong id="cura-contador">0 POKÉBOLAS</strong></span>
+            <span id="cura-etapa">PREPARANDO</span>
+        </div>
+        <div class="cura-barra" aria-hidden="true"><span></span></div>
+        <p class="cura-status" id="cura-status" aria-live="polite">Preparando a recuperação...</p>
+        <button class="cura-fechar" type="button" id="cura-fechar" disabled>Continuar jornada</button>
+    </div>
+</div>
+<div class="cura-overlay" id="item-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="item-titulo">
+    <div class="cura-dialogo">
+        <h2 id="item-titulo">🎁 Item escondido!</h2>
+        <p id="item-mensagem" aria-live="polite"></p>
+        <button class="cura-fechar" type="button" id="item-fechar">Guardar na Mochila</button>
+    </div>
+</div>
+
 <script>
+    async function animarCentroPokemon(quantidade) {
+        const overlay = document.getElementById('cura-overlay');
+        const bandeja = document.getElementById('cura-bandeja');
+        const status = document.getElementById('cura-status');
+        const botao = document.getElementById('cura-fechar');
+        const etapa = document.getElementById('cura-etapa');
+        const monitor = document.getElementById('cura-monitor-texto');
+        const total = Math.min(5, Math.max(0, Number.parseInt(quantidade, 10) || 0));
+
+        // Cria apenas as Pokebolas dos Pokemon presentes no time ativo.
+        // Nenhuma Pokebola ficticia para posicoes vazias ou Pokemon na reserva.
+        bandeja.replaceChildren();
+        for (let i = 0; i < total; i++) {
+            const bola = document.createElement('span');
+            bola.className = 'cura-bola';
+            bola.style.setProperty('--i', i);
+            bandeja.appendChild(bola);
+        }
+        document.getElementById('cura-contador').textContent =
+            total + (total === 1 ? ' POKÉBOLA' : ' POKÉBOLAS');
+
+        overlay.classList.remove('curando', 'concluido');
+        overlay.hidden = false;
+        botao.disabled = true;
+        etapa.textContent = total ? 'RECUPERANDO' : 'SEM EQUIPE';
+        monitor.textContent = total ? 'RESTAURANDO HP...' : 'SEM POKÉMON';
+        overlay.querySelectorAll('.cura-led').forEach((el) => {
+            el.classList.toggle('aceso', total > 0);
+        });
+        status.textContent = total
+            ? 'Recuperando vida e removendo condições negativas...'
+            : 'Seu time está vazio. Nenhum Pokémon foi recuperado.';
+
+        if (total > 0) overlay.classList.add('curando');
+        await new Promise((resolver) => setTimeout(
+            resolver, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 450 : 3200
+        ));
+
+        overlay.classList.remove('curando');
+        if (total > 0) overlay.classList.add('concluido');
+        etapa.textContent = total ? 'CONCLUÍDO' : 'SEM ALTERAÇÕES';
+        monitor.textContent = total ? 'EQUIPE RECUPERADA!' : 'AGUARDANDO EQUIPE';
+        status.textContent = total === 0
+            ? 'Volte com Pokémon em seu time para utilizar a máquina.'
+            : `Tudo pronto! ${total} ${total === 1 ? 'Pokémon recuperado' : 'Pokémon recuperados'}. ✨`;
+        botao.disabled = false;
+        botao.focus();
+        await new Promise((resolver) => botao.addEventListener('click', resolver, { once: true }));
+    }
+
+    async function mostrarItemEncontrado(item) {
+        const overlay = document.getElementById('item-overlay');
+        document.getElementById('item-mensagem').textContent = '+' + item.quantidade + ' ' + item.nome + ' foi guardado na sua Mochila!';
+        overlay.hidden = false;
+        const botao = document.getElementById('item-fechar');
+        botao.focus();
+        await new Promise((resolver) => botao.addEventListener('click', resolver, { once: true }));
+    }
+
     // Pokemon da roleta de captura (o sorteio e feito no servidor; aqui so se desenha).
     const ROLETA = <?= json_encode($roleta, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
 
@@ -1485,6 +1999,16 @@ $corPorTipo = static function (string $tipo): string {
                     await Roleta.girarAte(resultado.captura);
                     return;
                 }
+                if (resultado.item_encontrado) {
+                    await mostrarItemEncontrado(resultado.item_encontrado);
+                    window.location.reload();
+                    return;
+                }
+                if (resultado.centro_pokemon) {
+                    await animarCentroPokemon(resultado.centro_pokemon.quantidade);
+                    window.location.reload();
+                    return;
+                }
 
                 // Mato, treinador ou chefe: segue direto para a tela de batalha.
                 if (resultado.no && (resultado.no.tipo_no === 'BATALHA' || resultado.no.tipo_no === 'CHEFE')) {
@@ -1568,8 +2092,8 @@ $corPorTipo = static function (string $tipo): string {
             }
         });
 
-        // Foco no primeiro card para dar para escolher so com o teclado.
-        if (cards.length > 0) cards[0].focus();
+        // O foco fica no titulo: nenhum dos iniciais comeca selecionado.
+        document.getElementById('inicial-titulo').focus();
     })();
     // ===== Painel TIME: trocar Pokemon de posicao =====
     (function () {

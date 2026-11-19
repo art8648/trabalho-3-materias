@@ -39,6 +39,10 @@ try {
             exit;
         }
 
+        // Evita que uma segunda aba altere HP, itens ou time durante uma luta em rodadas.
+        if (!empty($_SESSION['peakmon_batalha_interativa'][$idPerfil])) {
+            throw new DomainException('Ha uma batalha em andamento. Use os itens na tela de batalha ou termine a luta.');
+        }
         $acao = (string) ($_POST['acao'] ?? '');
         $id = static function (string $campo): int {
             $valor = filter_var($_POST[$campo] ?? null, FILTER_VALIDATE_INT);

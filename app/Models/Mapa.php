@@ -41,17 +41,12 @@ class Mapa
             throw new DomainException('O perfil selecionado nao pertence a este usuario.');
         }
 
-        // O projeto utiliza uma unica area. Por isso, carregamos a primeira area cadastrada.
-        $consultaArea = $this->pdo->query('
-            SELECT id, nome
-            FROM area_jogo
-            ORDER BY ordem ASC
-            LIMIT 1
-        ');
+        // Prepara o progresso da area 1, como na versao que ja funcionava.
+        $primeiraArea = $this->pdo->query('
+            SELECT id FROM area_jogo ORDER BY ordem ASC LIMIT 1
+        ')->fetchColumn();
 
-        $area = $consultaArea->fetch();
-
-        if ($area === false) {
+        if ($primeiraArea === false) {
             return [
                 'perfil' => $perfil,
                 'area' => null,
@@ -62,9 +57,37 @@ class Mapa
             ];
         }
 
-        $idArea = (int) $area['id'];
+        $this->garantirProgressoInicial($idPerfil, (int) $primeiraArea);
 
-        // Garante que o perfil tenha um ponto inicial, sem sobrescrever um save existente.
+        // A trigger do banco libera a proxima area ao vencer Hiago.
+        // Aqui apenas LEMOS o progresso ja existente: nao tentamos criar
+        // desbloqueios extras durante a abertura do mapa.
+        $consultaArea = $this->pdo->prepare("
+            SELECT a.id, a.nome, a.ordem, chefe.nome AS chefe_nome
+            FROM area_jogo a
+            LEFT JOIN personagem chefe ON chefe.id = a.id_personagem_chefe
+            WHERE a.id = :primeira_area
+               OR EXISTS (
+                   SELECT 1
+                   FROM progresso_area pa
+                   WHERE pa.id_perfil = :id_perfil
+                     AND pa.id_area = a.id
+                     AND pa.estado IN ('DISPONIVEL', 'EM_ANDAMENTO', 'CONCLUIDA')
+               )
+            ORDER BY a.ordem DESC
+            LIMIT 1
+        ");
+        $consultaArea->execute([
+            'primeira_area' => (int) $primeiraArea,
+            'id_perfil' => $idPerfil
+        ]);
+        $area = $consultaArea->fetch();
+        if ($area === false) {
+            throw new DomainException('Nao foi possivel carregar a area deste perfil.');
+        }
+
+        $idArea = (int) $area['id'];
+        // A area desbloqueada pode estar com o ponto inicial NULL (trigger da vitoria).
         $this->garantirProgressoInicial($idPerfil, $idArea);
 
         $consultaProgresso = $this->pdo->prepare('
@@ -81,7 +104,6 @@ class Mapa
               AND pa.id_area = :id_area
             LIMIT 1
         ');
-
         $consultaProgresso->execute([
             'id_perfil' => $idPerfil,
             'id_area' => $idArea
@@ -175,16 +197,18 @@ class Mapa
         $this->pdo->beginTransaction();
 
         try {
-            $consultaProgresso = $this->pdo->prepare('
+            $consultaProgresso = $this->pdo->prepare("
                 SELECT pa.id_area, pa.id_no_atual, pa.estado
                 FROM progresso_area pa
                 INNER JOIN perfil p ON p.id = pa.id_perfil
+                INNER JOIN area_jogo a ON a.id = pa.id_area
                 WHERE pa.id_perfil = :id_perfil
                   AND p.id_usuario = :id_usuario
-                ORDER BY pa.id_area ASC
+                  AND pa.estado IN ('DISPONIVEL', 'EM_ANDAMENTO')
+                ORDER BY a.ordem DESC
                 LIMIT 1
                 FOR UPDATE
-            ');
+            ");
 
             $consultaProgresso->execute([
                 'id_perfil' => $idPerfil,
@@ -289,8 +313,14 @@ class Mapa
             }
 
             $captura = null;
+            $itemEncontrado = null;
+            $centroPokemon = null;
             if ($destino['tipo_no'] === 'CAPTURA' && $aoChegarEmCaptura !== null) {
                 $captura = $aoChegarEmCaptura($idPerfil);
+            } elseif ($destino['tipo_no'] === 'ITEM') {
+                $itemEncontrado = $this->entregarItemEscondido($idPerfil);
+            } elseif ($destino['tipo_no'] === 'CURA') {
+                $centroPokemon = $this->curarNoCentro($idPerfil);
             }
 
             $this->pdo->commit();
@@ -308,6 +338,12 @@ class Mapa
             if ($captura !== null) {
                 $retorno['captura'] = $captura;
             }
+            if ($itemEncontrado !== null) {
+                $retorno['item_encontrado'] = $itemEncontrado;
+            }
+            if ($centroPokemon !== null) {
+                $retorno['centro_pokemon'] = $centroPokemon;
+            }
 
             return $retorno;
 
@@ -318,6 +354,53 @@ class Mapa
 
             throw $erro;
         }
+    }
+
+    /** Premia o jogador no proprio movimento, sem depender de um segundo POST. */
+    private function entregarItemEscondido(int $idPerfil): array
+    {
+        // Somente consumiveis da loja; a Pedra Universal continua na loja / chefes.
+        $nomes = ['Potion', 'Super Potion', 'Antidote', 'Burn Heal',
+                  'Ice Heal', 'Awakening', 'Paralyze Heal', 'Full Heal', 'Revive'];
+        $placeholders = implode(',', array_fill(0, count($nomes), '?'));
+        $consulta = $this->pdo->prepare("SELECT id, nome FROM item WHERE ativo = TRUE AND nome IN ($placeholders)");
+        $consulta->execute($nomes);
+        $itens = $consulta->fetchAll(PDO::FETCH_ASSOC);
+        if ($itens === []) {
+            throw new DomainException('Nao existem itens ativos para encontrar neste ponto.');
+        }
+        $item = $itens[random_int(0, count($itens) - 1)];
+
+        $inventario = $this->pdo->prepare('SELECT id FROM inventario WHERE id_perfil = :perfil LIMIT 1');
+        $inventario->execute(['perfil' => $idPerfil]);
+        $idInventario = $inventario->fetchColumn();
+        if ($idInventario === false) {
+            throw new DomainException('Inventario do perfil nao encontrado.');
+        }
+        $adicionar = $this->pdo->prepare('INSERT INTO inventario_item (id_inventario, id_item, quantidade)
+            VALUES (:inventario, :item, 1)
+            ON DUPLICATE KEY UPDATE quantidade = quantidade + 1');
+        $adicionar->execute(['inventario' => (int) $idInventario, 'item' => (int) $item['id']]);
+        return ['nome' => $item['nome'], 'quantidade' => 1];
+    }
+
+    /** Cura SOMENTE os integrantes do time ativo (slots de 1 a 5). */
+    private function curarNoCentro(int $idPerfil): array
+    {
+        $consulta = $this->pdo->prepare('SELECT COUNT(*)
+            FROM times tm INNER JOIN time_pokemon tp ON tp.id_time = tm.id
+            INNER JOIN pokemon_capturado pc ON pc.id = tp.id_pokemon_capturado
+            WHERE tm.id_perfil = :perfil AND tp.posicao BETWEEN 1 AND 5');
+        $consulta->execute(['perfil' => $idPerfil]);
+        $quantidade = (int) $consulta->fetchColumn();
+        $cura = $this->pdo->prepare('UPDATE pokemon_capturado pc
+            INNER JOIN pokemon p ON p.id = pc.id_pokemon
+            INNER JOIN time_pokemon tp ON tp.id_pokemon_capturado = pc.id
+            INNER JOIN times tm ON tm.id = tp.id_time
+            SET pc.hp_atual = p.hp, pc.desmaiado = FALSE, pc.status_condicao = NULL
+            WHERE tm.id_perfil = :perfil AND tp.posicao BETWEEN 1 AND 5');
+        $cura->execute(['perfil' => $idPerfil]);
+        return ['quantidade' => $quantidade];
     }
 
     private function garantirProgressoInicial(int $idPerfil, int $idArea): void
