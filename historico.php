@@ -112,10 +112,9 @@ $rotulos = [
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Histórico | Peakmon</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400..700&display=swap');
 :root {color-scheme:light;--ink:#253c43;--paper:#fff7de;--edge:#163a43;--red:#b74838;--teal:#48a594;}
 *{box-sizing:border-box}
-body {margin:0;min-height:100vh;padding:18px 14px 50px;color:var(--ink);font-family:'Pixelify Sans',Consolas,monospace;font-size:17px;background:repeating-linear-gradient(45deg,#75bdae 0 18px,#71b6a8 18px 36px)}
+body {margin:0;min-height:100vh;padding:18px 14px 50px;color:var(--ink);font-family:monospace;font-size:17px;background:repeating-linear-gradient(45deg,#75bdae 0 18px,#71b6a8 18px 36px)}
 .wrap{max-width:1120px;margin:auto}
 .header{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;padding:16px 22px;background:var(--paper);border:4px solid var(--edge);box-shadow:5px 5px #25535a}
 .header h1{margin:0;font-size:clamp(24px,4vw,33px);line-height:1.1}

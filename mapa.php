@@ -33,6 +33,7 @@ $idUsuario = (int) $_SESSION['usuario_id'];
 $idPerfil = (int) $_SESSION['perfil_id'];
 
 $mostrarInicial = false;
+$personagemNome = null;
 $iniciais = [];
 $slotsTime = [];
 $roleta = [];
@@ -214,6 +215,16 @@ try {
 
     $slotsTime = $time->listar($idPerfil);
     $dados = $mapa->carregarMapa($idPerfil, $idUsuario);
+    // Nome do personagem escolhido no perfil (Link, The Knight, Mereoleona...).
+    $consultaPersonagem = $pdo->prepare('
+        SELECT c.nome
+        FROM perfil p
+        JOIN personagem c ON c.id = p.id_personagem
+        WHERE p.id = :id_perfil AND p.id_usuario = :id_usuario
+        LIMIT 1
+    ');
+    $consultaPersonagem->execute(['id_perfil' => $idPerfil, 'id_usuario' => $idUsuario]);
+    $personagemNome = $consultaPersonagem->fetchColumn() ?: null;
     // Pokemon que aparecem na roleta (so desenha; o sorteio e feito no servidor).
     $roleta = $captura->listarRoleta();
     // Itens que aparecem na roleta do "Item escondido" (so desenha; o sorteio e no servidor).
@@ -317,14 +328,22 @@ $miniIcone = static function (string $arquivo, string $emoji, string $classe = '
         : $emoji;
 };
 $iconeNoHtml = static function (string $tipo, string $codigo = '') use ($iconePorTipo, $miniIcone): string {
-    // Os pontos ITEM e EVENTO usam SVG transparente; a logica de troca continua intacta.
-    if ($tipo === 'ITEM' || $tipo === 'EVENTO') {
-        $nomeArquivo = $tipo === 'ITEM' ? 'item' : 'evento';
+    // Os pontos ITEM, EVENTO, CAPTURA e INICIO usam SVG transparente; a logica de troca continua intacta.
+    if ($tipo === 'ITEM' || $tipo === 'EVENTO' || $tipo === 'CAPTURA' || $tipo === 'INICIO') {
+        $nomeArquivo = match ($tipo) {
+            'ITEM' => 'item',
+            'EVENTO' => 'evento',
+            'INICIO' => 'inicio',
+            default => 'captura',
+        };
         return '<img class="no-pixel-icon" src="images/mapa/' . $nomeArquivo . '.svg" alt="" draggable="false">';
+    }
+    // Chefe final: imagem do Hiago (images/mapa/hiago.png), maior que os demais pontos.
+    if ($tipo === 'CHEFE') {
+        return '<img class="no-pixel-icon no-chefe" src="images/mapa/hiago.png" alt="" draggable="false">';
     }
     $arquivo = match ($tipo) {
         'BATALHA' => str_starts_with($codigo, 'TREINADOR') ? 'treinador' : 'mato',
-        'CAPTURA' => 'pokebola',
         'CURA' => 'centro pokemon',
         'EVENTO' => 'sinal_estranho',
         default => '',
@@ -332,6 +351,23 @@ $iconeNoHtml = static function (string $tipo, string $codigo = '') use ($iconePo
     $emoji = $iconePorTipo($tipo, $codigo);
     return $arquivo !== '' ? $miniIcone($arquivo, $emoji, 'no-img') : $emoji;
 };
+
+// Imagem do personagem em images/personagens/<Nome>.<ext> (ex.: Link.png, The Knight.png).
+// Se o arquivo ainda nao existir, o ponto atual continua com o icone normal.
+$imagemPersonagem = static function (?string $nome): string {
+    if ($nome === null || $nome === '' || str_contains($nome, '/') || str_contains($nome, '\\') || str_contains($nome, '..')) {
+        return '';
+    }
+    foreach ([$nome, str_replace(' ', '_', $nome)] as $base) {
+        foreach (['png', 'webp', 'jpg', 'jpeg', 'gif', 'svg'] as $extensao) {
+            if (is_file(__DIR__ . '/images/personagens/' . $base . '.' . $extensao)) {
+                return 'images/personagens/' . rawurlencode($base) . '.' . $extensao;
+            }
+        }
+    }
+    return '';
+};
+$srcPersonagem = $imagemPersonagem($personagemNome);
 
 $idsProximos = [];
 $idNoAtual = null;
@@ -519,8 +555,8 @@ $corPorTipo = static function (string $tipo): string {
         }
 
         .no-img {
-            width: 40px;
-            height: 40px;
+            width: 42px;
+            height: 42px;
             object-fit: contain;
             image-rendering: pixelated;
             pointer-events: none;
@@ -568,6 +604,11 @@ $corPorTipo = static function (string $tipo): string {
             opacity: 0;
             visibility: hidden;
             pointer-events: none;
+        }
+
+        .no .dica.dica-baixo {
+            bottom: auto;
+            top: calc(100% + 7px);
         }
 
         .no:hover .dica, .no:focus-visible .dica {
@@ -630,7 +671,7 @@ $corPorTipo = static function (string $tipo): string {
             width: min(calc(100% - 40px), 1280px);
             margin: 0 auto 30px;
             display: grid;
-            grid-template-columns: 210px minmax(0, 620px) 180px;
+            grid-template-columns: 252px minmax(0, 620px) 180px;
             justify-content: center;
             align-items: start;
             gap: 18px;
@@ -775,6 +816,7 @@ $corPorTipo = static function (string $tipo): string {
             align-items: center;
             gap: 8px;
             padding: 5px 8px;
+            overflow: hidden;
             background: #f8f4e8;
             border: 2px solid #34383a;
             cursor: pointer;
@@ -814,12 +856,13 @@ $corPorTipo = static function (string $tipo): string {
         .time-dados {
             display: flex;
             flex-direction: column;
+            flex: 1 1 0;
             min-width: 0;
             font-size: 12px;
             line-height: 1.35;
         }
 
-        .time-dados strong { font-size: 14px; }
+        .time-dados strong { font-size: 14px; white-space: nowrap; }
         .time-dados em { color: #a84d38; font-style: normal; font-weight: bold; }
         .time-vazio { font-size: 12px; }
 
@@ -1738,6 +1781,8 @@ $corPorTipo = static function (string $tipo): string {
         /* Icones vetoriais transparentes no mapa. */
         .no-pixel-icon { display:block; width:42px; height:42px; image-rendering:pixelated; filter:drop-shadow(1px 2px 0 #21343e); }
         .no { font-size:33px; }
+        .no-chefe { width:60px; height:60px; filter:drop-shadow(1px 2px 0 #21343e); }
+        .no-personagem { display:block; width:100%; height:100%; border-radius:50%; object-fit:cover; pointer-events:none; user-select:none; }
         .acessos-laterais .painel-inferior, .acessos-laterais .legenda {
             width:100%; margin:12px 0 0; padding:12px 10px;
             box-shadow:2px 3px #42484b; font-size:11px; line-height:1.65;
@@ -1746,7 +1791,7 @@ $corPorTipo = static function (string $tipo): string {
         .legenda-grade { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px 4px; }
         .legenda-grade span { display:flex; align-items:center; gap:4px; min-width:0; }
         .legenda-grade img { width:22px; height:22px; object-fit:contain; }
-        .area-jogo { width:min(calc(100% - 26px),1200px); grid-template-columns:minmax(175px,210px) minmax(0,620px) minmax(200px,258px); gap:14px; }
+        .area-jogo { width:min(calc(100% - 26px),1200px); grid-template-columns:minmax(210px,252px) minmax(0,620px) minmax(200px,258px); gap:14px; }
         .area-jogo .mapa { min-height:570px; height:min(82vh,850px); }
         .indice-area { margin-top:8px; }
         h1 { margin:9px 8px 13px; }
@@ -1855,6 +1900,11 @@ $corPorTipo = static function (string $tipo): string {
                     $x = max(3, min(97, (int) $no['pos_x']));
                     $y = max(3, min(97, (int) $no['pos_y']));
                     $icone = $iconeNoHtml($no['tipo_no'], (string) $no['codigo']);
+                    if ($atual && $srcPersonagem !== '') {
+                        $icone = '<img class="no-personagem" src="' . $escapar($srcPersonagem) . '" alt="" draggable="false">';
+                    }
+                    // Pontos no topo do mapa mostram a dica para baixo (para cima nao ha espaco).
+                    $classeDica = $y <= 16 ? ' dica-baixo' : '';
                     $tituloNo = $no['titulo'];
                     $descricaoNo = $no['descricao'] ?? '';
                 ?>
@@ -1869,7 +1919,7 @@ $corPorTipo = static function (string $tipo): string {
                         aria-label="Avancar para <?= $escapar($tituloNo) ?>"
                     >
                         <?= $icone ?>
-                        <span class="dica"><?= $escapar($tituloNo) ?><?= $descricaoNo !== '' ? ' — ' . $escapar($descricaoNo) : '' ?></span>
+                        <span class="dica<?= $classeDica ?>"><?= $escapar($tituloNo) ?><?= $descricaoNo !== '' ? ' — ' . $escapar($descricaoNo) : '' ?></span>
                     </button>
                 <?php else: ?>
                     <div
@@ -1878,7 +1928,7 @@ $corPorTipo = static function (string $tipo): string {
                         aria-label="<?= $escapar($tituloNo) ?>"
                     >
                         <?= $icone ?>
-                        <span class="dica"><?= $escapar($tituloNo) ?><?= $atual ? ' — Ponto atual' : '' ?></span>
+                        <span class="dica<?= $classeDica ?>"><?= $escapar($tituloNo) ?><?= $atual ? ' — Ponto atual' : '' ?></span>
                     </div>
                 <?php endif; ?>
             <?php endforeach; ?>
@@ -1926,7 +1976,7 @@ $corPorTipo = static function (string $tipo): string {
                     <span>🌿 Mato</span><span>🥋 Treinador</span>
                     <span><img src="images/mapa/captura.svg" alt=""> Captura</span><span><img src="images/mapa/item.svg" alt=""> Item</span>
                     <span>🛒 Loja</span><span>🏥 Centro</span>
-                    <span><img src="images/mapa/evento.svg" alt=""> Evento</span><span>⭐ Chefe</span>
+                    <span><img src="images/mapa/evento.svg" alt=""> Evento</span><span><img src="images/mapa/hiago.png" alt=""> Chefe</span>
                 </div>
             </section>
             <?php endif; ?>

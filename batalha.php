@@ -401,6 +401,28 @@ if ($previa !== null) {
         .placa.jogador { right: 3%; bottom: 8%; }
         .placa strong { font-size: 14px; }
         .placa .tipo { color: #5d5849; }
+        /* Condicao (queimadura, congelamento...) ao lado do nome do Pokemon. */
+        .condicao {
+            display: inline-block;
+            margin: 0 3px 0 4px;
+            padding: 0 6px;
+            border: 2px solid var(--cond-borda);
+            background: var(--cond-fundo);
+            color: var(--cond-texto);
+            font-size: 10px;
+            font-weight: bold;
+            letter-spacing: .5px;
+            line-height: 1.5;
+            vertical-align: 1px;
+            white-space: nowrap;
+        }
+        .condicao.novo { animation: condicao-pop .6s ease-out; }
+        .condicao-queimadura { --cond-fundo: #ff8a3d; --cond-borda: #b3220f; --cond-texto: #4a0d00; }
+        .condicao-congelamento { --cond-fundo: #8be9ff; --cond-borda: #0a6fb8; --cond-texto: #05324f; }
+        .condicao-paralisia { --cond-fundo: #ffe14d; --cond-borda: #a87b00; --cond-texto: #4a3600; }
+        .condicao-veneno { --cond-fundo: #c58cff; --cond-borda: #6b2aa8; --cond-texto: #2e0c52; }
+        .condicao-sono { --cond-fundo: #b9c4e8; --cond-borda: #4a5a99; --cond-texto: #1c2650; }
+        @keyframes condicao-pop { 0% { transform: scale(2.2); opacity: 0; } 60% { transform: scale(.9); opacity: 1; } 100% { transform: none; } }
         .barra { height: 10px; margin-top: 5px; background: #c9c2b0; border: 2px solid #34383a; }
         .barra > span { display: block; height: 100%; width: 100%; background: #5fae5f; transition: width .5s ease-out, background .3s; }
         .barra > span.medio { background: #e0b43a; }
@@ -619,6 +641,22 @@ if ($previa !== null) {
         const $ = (id) => document.getElementById(id);
         const reduzirMovimento = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+        // Condicoes de status: simbolo + nome no gerundio + classe de cor (ver .condicao-*).
+        const CONDICOES = {
+            QUEIMADURA: { simbolo: '🔥', rotulo: 'QUEIMANDO', classe: 'condicao-queimadura' },
+            CONGELAMENTO: { simbolo: '❄️', rotulo: 'CONGELADO', classe: 'condicao-congelamento' },
+            PARALISIA: { simbolo: '⚡', rotulo: 'PARALISADO', classe: 'condicao-paralisia' },
+            VENENO: { simbolo: '☠️', rotulo: 'ENVENENADO', classe: 'condicao-veneno' },
+            SONO: { simbolo: '💤', rotulo: 'DORMINDO', classe: 'condicao-sono' },
+        };
+
+        function criarCondicao(status, novo) {
+            const info = CONDICOES[status] || { simbolo: '❗', rotulo: String(status), classe: '' };
+            const el = criar('span', 'condicao ' + info.classe + (novo ? ' novo' : ''), info.simbolo + ' ' + info.rotulo);
+            el.title = info.rotulo;
+            return el;
+        }
+
         function criar(tag, classe, texto) {
             const el = document.createElement(tag);
             if (classe) el.className = classe;
@@ -808,13 +846,13 @@ if ($previa !== null) {
                 });
             }
 
-            function desenharPlaca(lado, indice) {
+            function desenharPlaca(lado, indice, condicaoNova) {
                 const lutador = times[lado][indice];
                 const atual = hp[lado][indice];
                 placa[lado].textContent = '';
                 placa[lado].appendChild(criar('strong', '', lutador.nome));
+                if (lutador.status) placa[lado].appendChild(criarCondicao(lutador.status, condicaoNova === true));
                 placa[lado].appendChild(criar('span', 'tipo', ' ' + lutador.tipo));
-                if (lutador.status) placa[lado].appendChild(criar('span', 'tipo', ' • ' + lutador.status));
 
                 const barra = criar('div', 'barra');
                 const preenchimento = criar('span', classeHp(atual, lutador.hp_max));
@@ -929,8 +967,9 @@ if ($previa !== null) {
                         } else { hp.jogador[ev.i] = ev.hp_alvo; desenharFila('jogador', res.iJ); }
                         await dormir(650);
                     } else if (ev.tipo === 'status') {
+                        const statusAntes = times[ev.lado][ev.i].status;
                         times[ev.lado][ev.i].status = ev.status;
-                        if (ev.i === (ev.lado === 'jogador' ? res.iJ : res.iI)) desenharPlaca(ev.lado, ev.i);
+                        if (ev.i === (ev.lado === 'jogador' ? res.iJ : res.iI)) desenharPlaca(ev.lado, ev.i, statusAntes !== ev.status);
                         await dormir(350);
                     } else if (ev.tipo === 'efeito_status') {
                         atualizarHp(ev.lado, ev.i, ev.hp_alvo);
@@ -1060,7 +1099,7 @@ if ($previa !== null) {
                     const o = document.createElement('option');
                     o.value = pokemon.id_capturado;
                     o.textContent = pokemon.nome + ' — ' + pokemon.hp + '/' + pokemon.hp_max + ' HP' +
-                        (pokemon.status ? ' • ' + pokemon.status : '') + (pokemon.hp <= 0 ? ' • desmaiado' : '');
+                        (pokemon.status ? ' • ' + ((CONDICOES[pokemon.status] || {}).rotulo || pokemon.status) : '') + (pokemon.hp <= 0 ? ' • desmaiado' : '');
                     seletorAlvo.appendChild(o);
                 });
                 aplicar.disabled = !seletorItem.options.length || processando;

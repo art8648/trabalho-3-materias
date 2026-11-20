@@ -7,6 +7,7 @@ namespace Peakmon\Models;
 use DomainException;
 use PDO;
 use Peakmon\Exceptions\ItemInvalidoException;
+use Peakmon\Models\Condicoes\CondicaoStatus;
 
 /**
  * Batalha automatica estilo Pokelike.
@@ -541,11 +542,9 @@ class Batalha
                 $iAlvo = $lado === 'jogador' ? $estado['iI'] : $estado['iJ'];
                 $fator = $lado === 'jogador' ? 1.0 : (float) $estado['fator'];
                 $statusAtacante = $estado[$atacante][$iAtacante]['status'] ?? null;
-                $chancePerderAcao = match ($statusAtacante) {
-                    'SONO' => 70, 'CONGELAMENTO' => 60, 'PARALISIA' => 25,
-                    default => 0,
-                };
-                if ($chancePerderAcao > 0 && random_int(1, 100) <= $chancePerderAcao) {
+                // Polimorfismo: cada condicao (Sono, Congelamento, Paralisia...) decide sozinha.
+                $condicaoAtacante = CondicaoStatus::porNome($statusAtacante);
+                if ($condicaoAtacante !== null && $condicaoAtacante->perdeAcao()) {
                     $eventos[] = [
                         'tipo' => 'status', 'turno' => $estado['turno'],
                         'lado' => $atacante, 'i' => $iAtacante, 'status' => $statusAtacante,
@@ -560,19 +559,16 @@ class Batalha
                 $estado[$alvo][$iAlvo]['hp'] = max(0, $estado[$alvo][$iAlvo]['hp'] - $dano['dano']);
                 $eventos[] = $this->eventoAtaque($lado, $iAtacante, $iAlvo,
                     $estado[$atacante][$iAtacante], $estado[$alvo][$iAlvo], $dano, $estado['turno']);
-                $tipoStatus = [
-                    'VENENO' => 'VENENO', 'FOGO' => 'QUEIMADURA',
-                    'GELO' => 'CONGELAMENTO', 'ELETRICO' => 'PARALISIA', 'PSIQUICO' => 'SONO'
-                ];
-                $tipoGolpe = $estado[$atacante][$iAtacante]['tipo'];
+                // O tipo do golpe define qual subclasse de CondicaoStatus pode ser causada.
+                $condicaoNova = CondicaoStatus::porTipoDoGolpe((string) $estado[$atacante][$iAtacante]['tipo']);
                 if (!$investidaEmergencia && $dano['dano'] > 0 && $estado[$alvo][$iAlvo]['hp'] > 0
                     && $estado[$alvo][$iAlvo]['status'] === null
-                    && isset($tipoStatus[$tipoGolpe]) && random_int(1, 100) <= 15) {
-                    $estado[$alvo][$iAlvo]['status'] = $tipoStatus[$tipoGolpe];
+                    && $condicaoNova !== null && random_int(1, 100) <= 15) {
+                    $estado[$alvo][$iAlvo]['status'] = $condicaoNova->nome();
                     $eventos[] = [
                         'tipo' => 'status', 'turno' => $estado['turno'], 'lado' => $alvo,
-                        'i' => $iAlvo, 'status' => $tipoStatus[$tipoGolpe],
-                        'msg' => $estado[$alvo][$iAlvo]['nome'] . ' sofreu ' . $tipoStatus[$tipoGolpe] . '!'
+                        'i' => $iAlvo, 'status' => $condicaoNova->nome(),
+                        'msg' => $estado[$alvo][$iAlvo]['nome'] . ' sofreu ' . $condicaoNova->nome() . '!'
                     ];
                 }
 
@@ -600,8 +596,10 @@ class Batalha
                 $i = $estado[$indiceAtivo];
                 if ($i >= count($estado[$lado]) || $estado[$lado][$i]['hp'] <= 0) continue;
                 $status = $estado[$lado][$i]['status'];
-                if (!in_array($status, ['VENENO', 'QUEIMADURA'], true)) continue;
-                $danoResidual = max(1, (int) ceil($estado[$lado][$i]['hp_max'] / 16));
+                $condicao = CondicaoStatus::porNome($status);
+                if ($condicao === null || !$condicao->temDanoResidual()) continue;
+                // Sobrecarga (__call): danoResidual() recebendo o array do lutador.
+                $danoResidual = $condicao->danoResidual($estado[$lado][$i]);
                 $estado[$lado][$i]['hp'] = max(0, $estado[$lado][$i]['hp'] - $danoResidual);
                 $eventos[] = [
                     'tipo' => 'efeito_status', 'turno' => $estado['turno'], 'lado' => $lado,

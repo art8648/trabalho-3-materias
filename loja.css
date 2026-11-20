@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400..700&display=swap');
 
 /* =====================================================================
    LOJA - estilo "Pokemon Mart" (FireRed / LeafGreen)
@@ -18,7 +17,7 @@
     --gold: #f2c94c;
     --red: #d9483b;
     --muted: #6d7f9c;
-    --fonte: 'Pixelify Sans', ui-monospace, Consolas, monospace;
+    --fonte: monospace;
 }
 
 * { box-sizing: border-box; }

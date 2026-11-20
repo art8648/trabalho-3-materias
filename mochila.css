@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400..700&display=swap');
 
 /* =====================================================================
    MOCHILA - estilo tela de "Bag" do Pokemon FireRed / LeafGreen
@@ -21,7 +20,7 @@
     --blue-dark: #172b5c;
     --gold: #f2c94c;
     --muted: #8a7466;
-    --fonte: 'Pixelify Sans', ui-monospace, Consolas, monospace;
+    --fonte: monospace;
 }
 
 * { box-sizing: border-box; }
