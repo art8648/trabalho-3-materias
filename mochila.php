@@ -28,78 +28,21 @@ $csrf = (string) $_SESSION['csrf_mochila'];
 
 try {
     $pdo = require __DIR__ . '/config/database.php';
-    $mochila = new Mochila($pdo);
-    $time = new Time($pdo);
-
+    $controller = new \Peakmon\Controllers\MochilaController($pdo);
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         header('Content-Type: application/json; charset=utf-8');
-        if (!hash_equals($csrf, (string) ($_POST['csrf'] ?? ''))) {
-            http_response_code(403);
-            echo json_encode(['sucesso' => false, 'mensagem' => 'A solicitacao expirou. Atualize a pagina.'], JSON_UNESCAPED_UNICODE);
-            exit;
-        }
-
-        // Evita que uma segunda aba altere HP, itens ou time durante uma luta em rodadas.
-        if (!empty($_SESSION['peakmon_batalha_interativa'][$idPerfil])) {
-            throw new DomainException('Ha uma batalha em andamento. Use os itens na tela de batalha ou termine a luta.');
-        }
-        $acao = (string) ($_POST['acao'] ?? '');
-        $id = static function (string $campo): int {
-            $valor = filter_var($_POST[$campo] ?? null, FILTER_VALIDATE_INT);
-            if ($valor === false || $valor === null || $valor <= 0) {
-                throw new DomainException('Dados invalidos. Atualize a pagina e tente novamente.');
-            }
-            return (int) $valor;
-        };
-
-        switch ($acao) {
-            case 'usar_item':
-                $mensagem = $mochila->usarItem($idPerfil, $idUsuario, $id('id_item'), $id('id_capturado'));
-                echo json_encode(['sucesso' => true, 'mensagem' => $mensagem], JSON_UNESCAPED_UNICODE);
-                exit;
-            case 'trocar_reserva':
-                $mochila->trocarComReserva($idPerfil, $idUsuario, $id('id_capturado'), $id('posicao'));
-                echo json_encode(['sucesso' => true, 'mensagem' => 'Equipe atualizada! Os integrantes foram deslocados para abrir espaço.'], JSON_UNESCAPED_UNICODE);
-                exit;
-            case 'enviar_reserva':
-                $mochila->enviarParaReserva($idPerfil, $idUsuario, $id('posicao'));
-                echo json_encode(['sucesso' => true, 'mensagem' => 'Pokemon enviado para o Arquivo Bigolin.'], JSON_UNESCAPED_UNICODE);
-                exit;
-            case 'mover_time':
-                $time->mover($idPerfil, $idUsuario, $id('de'), $id('para'));
-                echo json_encode(['sucesso' => true, 'mensagem' => 'Ordem da equipe atualizada!'], JSON_UNESCAPED_UNICODE);
-                exit;
-            case 'listar_evolucoes':
-                $opcoes = $mochila->listarEvolucoes($idPerfil, $idUsuario, $id('id_capturado'));
-                echo json_encode(['sucesso' => true, 'evolucoes' => $opcoes], JSON_UNESCAPED_UNICODE);
-                exit;
-            case 'evoluir':
-                $mensagem = $mochila->evoluirComPedra($idPerfil, $idUsuario, $id('id_capturado'), $id('id_destino'));
-                echo json_encode(['sucesso' => true, 'mensagem' => $mensagem], JSON_UNESCAPED_UNICODE);
-                exit;
-            default:
-                http_response_code(400);
-                echo json_encode(['sucesso' => false, 'mensagem' => 'Acao desconhecida.'], JSON_UNESCAPED_UNICODE);
-                exit;
-        }
+        $resultado = $controller->processarAcao($idPerfil, $idUsuario, $csrf, $_POST);
+        echo json_encode($resultado, JSON_UNESCAPED_UNICODE);
+        exit;
     }
-
-    $itens = $mochila->listarItens($idPerfil, $idUsuario);
-    $equipe = $mochila->listarEquipe($idPerfil, $idUsuario);
-    $reserva = $mochila->listarReserva($idPerfil, $idUsuario);
-    $todosPokemon = [];
-    foreach ($equipe as $pokemon) {
-        if ($pokemon !== null) {
-            $todosPokemon[] = $pokemon;
-        }
-    }
-    foreach ($reserva as $pokemon) {
-        $todosPokemon[] = $pokemon;
-    }
-    usort($todosPokemon, static fn(array $a, array $b): int => strcasecmp((string) $a['nome'], (string) $b['nome']));
+    $pagina = $controller->prepararPagina($idPerfil, $idUsuario);
+    $itens = $pagina['itens'];
+    $equipe = $pagina['equipe'];
+    $reserva = $pagina['reserva'];
+    $todosPokemon = $pagina['todosPokemon'];
 } catch (Throwable $erro) {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        http_response_code($erro instanceof DomainException ? 400 : 500);
+        http_response_code($erro instanceof DomainException ? ($erro->getCode() === 403 ? 403 : 400) : 500);
         header('Content-Type: application/json; charset=utf-8');
         echo json_encode(['sucesso' => false, 'mensagem' => $erro instanceof DomainException ? $erro->getMessage() : 'Ocorreu um erro ao acessar a mochila.'], JSON_UNESCAPED_UNICODE);
         exit;
@@ -326,9 +269,27 @@ $imagemPokemon = static function (array $pokemon) use ($h): string {
     </main>
 </div>
 <div class="toast hidden" id="toast" role="status"></div>
+<template id="peak-dialog-template">
+    <div class="peak-dialog-backdrop">
+        <section class="peak-dialog" role="dialog" aria-modal="true" aria-labelledby="peak-dialog-heading">
+            <h2 class="peak-dialog-title" id="peak-dialog-heading"></h2>
+            <p class="peak-dialog-text"></p>
+            <div class="peak-dialog-actions">
+                <button type="button" class="peak-dialog-ok">Confirmar</button>
+                <button type="button" class="peak-dialog-cancel">Cancelar</button>
+            </div>
+        </section>
+    </div>
+</template>
+<template id="modelos-mochila"><div></div><img alt=""><p></p></template>
 <script src="assets/peakui.js"></script>
 <script>
 (() => {
+    function clonarMochila(tag) {
+        const modelo = document.getElementById('modelos-mochila').content.querySelector(tag);
+        if (!modelo) throw new Error('Modelo da mochila não encontrado: ' + tag);
+        return modelo.cloneNode(true);
+    }
     const chavePreferencias = 'peakmon_mochila_selecao_<?= (int) $idPerfil ?>';
     let preferencias = {};
     try { preferencias = JSON.parse(sessionStorage.getItem(chavePreferencias) || '{}') || {}; }
@@ -385,7 +346,7 @@ $imagemPokemon = static function (array $pokemon) use ($h): string {
         document.getElementById('painel-detalhe').className = 'panel detail ' + (classesCor[itemSelecionado.tipo] || '');
         if (card.dataset.imagem) {
             caixaIcone.innerHTML = '';
-            const imgEl = document.createElement('img');
+            const imgEl = clonarMochila('img');
             imgEl.src = card.dataset.imagem;
             imgEl.alt = itemSelecionado.nome;
             caixaIcone.appendChild(imgEl);
@@ -509,19 +470,19 @@ $imagemPokemon = static function (array $pokemon) use ($h): string {
         return new Promise((resolver) => {
             const reduzir = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-            const overlay = document.createElement('div');
+            const overlay = clonarMochila('div');
             overlay.className = 'evo-overlay';
             overlay.setAttribute('role', 'dialog');
             overlay.setAttribute('aria-live', 'polite');
 
-            const palco = document.createElement('div');
+            const palco = clonarMochila('div');
             palco.className = 'evo-palco';
-            const brilho = document.createElement('div');
+            const brilho = clonarMochila('div');
             brilho.className = 'evo-brilho';
-            const sprite = document.createElement('img');
+            const sprite = clonarMochila('img');
             sprite.className = 'evo-sprite';
             sprite.onerror = () => { sprite.style.visibility = 'hidden'; };
-            const texto = document.createElement('p');
+            const texto = clonarMochila('p');
             texto.className = 'evo-texto';
 
             palco.appendChild(brilho);

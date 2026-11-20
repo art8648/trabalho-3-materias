@@ -1917,8 +1917,39 @@ $corPorTipo = static function (string $tipo): string {
     </div>
 </div>
 
+<template id="peak-dialog-template">
+    <div class="peak-dialog-backdrop">
+        <section class="peak-dialog" role="dialog" aria-modal="true" aria-labelledby="peak-dialog-heading">
+            <h2 class="peak-dialog-title" id="peak-dialog-heading"></h2>
+            <p class="peak-dialog-text"></p>
+            <div class="peak-dialog-actions">
+                <button type="button" class="peak-dialog-ok">Confirmar</button>
+                <button type="button" class="peak-dialog-cancel">Cancelar</button>
+            </div>
+        </section>
+    </div>
+</template>
+<template id="modelos-mapa">
+    <div></div><span></span><strong></strong><small></small><button type="button"></button><img alt="">
+</template>
+<template id="modelos-roleta-svg">
+    <svg xmlns="http://www.w3.org/2000/svg">
+        <path></path><g></g><image></image><text></text><circle></circle>
+    </svg>
+</template>
 <script src="assets/peakui.js"></script>
 <script>
+    // Modelos sao declarados no HTML para respeitar a restricao do professor.
+    function clonarMapa(tag) {
+        const modelo = document.getElementById('modelos-mapa').content.querySelector(tag);
+        if (!modelo) throw new Error('Modelo visual não cadastrado: ' + tag);
+        return modelo.cloneNode(true);
+    }
+    function clonarSvg(tag) {
+        const modelo = document.getElementById('modelos-roleta-svg').content.querySelector(tag);
+        if (!modelo) throw new Error('Modelo SVG não cadastrado: ' + tag);
+        return modelo.cloneNode(true);
+    }
     async function animarCentroPokemon(quantidade) {
         const overlay = document.getElementById('cura-overlay');
         const bandeja = document.getElementById('cura-bandeja');
@@ -1932,7 +1963,7 @@ $corPorTipo = static function (string $tipo): string {
         // Nenhuma Pokebola ficticia para posicoes vazias ou Pokemon na reserva.
         bandeja.replaceChildren();
         for (let i = 0; i < total; i++) {
-            const bola = document.createElement('span');
+            const bola = clonarMapa('span');
             bola.className = 'cura-bola';
             bola.style.setProperty('--i', i);
             bandeja.appendChild(bola);
@@ -2021,9 +2052,8 @@ $corPorTipo = static function (string $tipo): string {
             roda.replaceChildren();
             if (total === 0) return;
 
-            const NS = 'http://www.w3.org/2000/svg';
             const criar = (nome, atributos) => {
-                const elemento = document.createElementNS(NS, nome);
+                const elemento = clonarSvg(nome);
                 Object.keys(atributos).forEach((chave) => elemento.setAttribute(chave, atributos[chave]));
                 return elemento;
             };
@@ -2187,19 +2217,19 @@ $corPorTipo = static function (string $tipo): string {
 
             let marca;
             if (info.imagem) {
-                marca = document.createElement('img');
+                marca = clonarMapa('img');
                 marca.src = info.imagem;
                 marca.alt = info.alt || '';
             } else {
-                marca = document.createElement('span');
+                marca = clonarMapa('span');
                 marca.className = 'roleta-emoji';
                 marca.textContent = info.icone || '🎁';
             }
 
-            const texto = document.createElement('div');
-            const titulo = document.createElement('strong');
+            const texto = clonarMapa('div');
+            const titulo = clonarMapa('strong');
             titulo.textContent = info.titulo;
-            const detalhe = document.createElement('span');
+            const detalhe = clonarMapa('span');
             detalhe.textContent = info.detalhe;
 
             texto.appendChild(titulo);
@@ -2266,23 +2296,23 @@ $corPorTipo = static function (string $tipo): string {
         }
 
         function criarCard(pokemon, detalhe, aoClicar) {
-            const botao = document.createElement('button');
+            const botao = clonarMapa('button');
             botao.type = 'button';
             botao.className = 'sinal-card';
 
-            const foto = document.createElement('img');
+            const foto = clonarMapa('img');
             foto.src = pokemon.imagem;
             foto.alt = '';
             foto.onerror = () => { foto.style.visibility = 'hidden'; };
 
-            const nome = document.createElement('span');
+            const nome = clonarMapa('span');
             nome.textContent = pokemon.nome;
 
             botao.appendChild(foto);
             botao.appendChild(nome);
 
             if (detalhe) {
-                const pequeno = document.createElement('small');
+                const pequeno = clonarMapa('small');
                 pequeno.textContent = detalhe;
                 botao.appendChild(pequeno);
             }
@@ -2361,12 +2391,12 @@ $corPorTipo = static function (string $tipo): string {
             texto.textContent = '';
 
             resultadoEl.textContent = '';
-            const foto = document.createElement('img');
+            const foto = clonarMapa('img');
             foto.src = r.imagem;
             foto.alt = r.novo;
-            const titulo = document.createElement('strong');
+            const titulo = clonarMapa('strong');
             titulo.textContent = r.antigo + ' virou ' + r.novo + '!';
-            const detalhe = document.createElement('span');
+            const detalhe = clonarMapa('span');
             detalhe.textContent = r.destino === 'time'
                 ? r.novo + ' ocupou a posição ' + r.posicao + ' do seu time.'
                 : r.novo + ' ficou na reserva (Arquivo Bigolin, na Mochila).';

@@ -76,9 +76,8 @@ final class MapaController
                     unset($_SESSION['peakmon_encontro'][$chave]);
                 }
             }
-            // Mantido para compatibilidade com o reset anterior.
-            $zerarSaldo = $this->pdo->prepare('UPDATE perfil SET dinheiro = 0 WHERE id = :perfil');
-            $zerarSaldo->execute(['perfil' => $idPerfil]);
+            // Perfil::reiniciarEscolhas ja zera o dinheiro dentro da transacao.
+            // Uma segunda atualizacao aqui poderia recriar um evento no Diario.
             return [
                 'sucesso' => true,
                 'mensagem' => 'Perfil reiniciado.',
@@ -149,15 +148,8 @@ final class MapaController
         }
         $slotsTime = $this->time->listar($idPerfil);
         $dados = $this->mapa->carregarMapa($idPerfil, $idUsuario);
-        $consultaPersonagem = $this->pdo->prepare('
-            SELECT c.nome
-            FROM perfil p
-            JOIN personagem c ON c.id = p.id_personagem
-            WHERE p.id = :id_perfil AND p.id_usuario = :id_usuario
-            LIMIT 1
-        ');
-        $consultaPersonagem->execute(['id_perfil' => $idPerfil, 'id_usuario' => $idUsuario]);
-        $personagemNome = $consultaPersonagem->fetchColumn() ?: null;
+        $perfilAtual = $this->perfil->buscarPorIdDoUsuario($idPerfil, $idUsuario);
+        $personagemNome = $perfilAtual['personagem_nome'] ?? null;
 
         $roleta = $this->captura->listarRoleta();
         $roletaItens = $this->mapa->listarRoletaItens();

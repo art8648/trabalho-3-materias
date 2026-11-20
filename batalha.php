@@ -605,6 +605,13 @@ if ($previa !== null) {
         <section id="fase-resultado" class="painel resultado" hidden></section>
     </main>
 
+<template id="modelos-batalha">
+    <div data-tag="div"></div><span data-tag="span"></span>
+    <strong data-tag="strong"></strong><em data-tag="em"></em>
+    <h2 data-tag="h2"></h2><p data-tag="p"></p>
+    <li data-tag="li"></li><a data-tag="a"></a>
+    <button type="button" data-tag="button"></button><option data-tag="option"></option>
+</template>
     <script>
         const DADOS = <?= json_encode($dadosJs, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
 
@@ -629,7 +636,10 @@ if ($previa !== null) {
         }
 
         function criar(tag, classe, texto) {
-            const el = document.createElement(tag);
+            const modelo = document.getElementById('modelos-batalha').content.querySelector('[data-tag="' + tag + '"]');
+            if (!modelo) throw new Error('Elemento de batalha não previsto: ' + tag);
+            const el = modelo.cloneNode(true);
+            el.removeAttribute('data-tag');
             if (classe) el.className = classe;
             if (texto !== undefined) el.textContent = texto;
             return el;
@@ -1060,14 +1070,14 @@ if ($previa !== null) {
             function montarSeletores() {
                 seletorItem.replaceChildren();
                 inventario.filter(i => i.tipo_efeito !== 'PEDRA_EVOLUCAO').forEach((item) => {
-                    const o = document.createElement('option');
+                    const o = criar('option');
                     o.value = item.id;
                     o.textContent = item.nome + ' (' + item.quantidade + ')';
                     seletorItem.appendChild(o);
                 });
                 seletorAlvo.replaceChildren();
                 time.forEach((pokemon) => {
-                    const o = document.createElement('option');
+                    const o = criar('option');
                     o.value = pokemon.id_capturado;
                     o.textContent = pokemon.nome + ' — ' + pokemon.hp + '/' + pokemon.hp_max + ' HP' +
                         (pokemon.status ? ' • ' + ((CONDICOES[pokemon.status] || {}).rotulo || pokemon.status) : '') + (pokemon.hp <= 0 ? ' • desmaiado' : '');

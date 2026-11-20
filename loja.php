@@ -27,44 +27,21 @@ $csrf = (string) $_SESSION['csrf_loja'];
 
 try {
     $pdo = require __DIR__ . '/config/database.php';
-    $loja = new Loja($pdo);
-
+    $controller = new \Peakmon\Controllers\LojaController($pdo);
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         header('Content-Type: application/json; charset=utf-8');
-        if (!hash_equals($csrf, (string) ($_POST['csrf'] ?? ''))) {
-            http_response_code(403);
-            echo json_encode(['sucesso' => false, 'mensagem' => 'A solicitacao expirou. Atualize a pagina.'], JSON_UNESCAPED_UNICODE);
-            exit;
-        }
-
-        if (($_POST['acao'] ?? '') !== 'comprar') {
-            http_response_code(400);
-            echo json_encode(['sucesso' => false, 'mensagem' => 'Acao desconhecida.'], JSON_UNESCAPED_UNICODE);
-            exit;
-        }
-
-        $idItem = filter_var($_POST['id_item'] ?? null, FILTER_VALIDATE_INT);
-        $quantidade = filter_var($_POST['quantidade'] ?? null, FILTER_VALIDATE_INT);
-        if ($idItem === false || $idItem === null || $quantidade === false || $quantidade === null) {
-            throw new DomainException('Dados da compra invalidos.');
-        }
-
-        $resultado = $loja->comprar($idPerfil, $idUsuario, (int) $idItem, (int) $quantidade);
-        echo json_encode(['sucesso' => true] + $resultado, JSON_UNESCAPED_UNICODE);
+        $resultado = $controller->processarAcao($idPerfil, $idUsuario, $csrf, $_POST);
+        echo json_encode($resultado, JSON_UNESCAPED_UNICODE);
         exit;
     }
-
-    $dadosLoja = $loja->carregarLoja($idPerfil, $idUsuario);
+    $dadosLoja = $controller->prepararPagina($idPerfil, $idUsuario);
     $itens = $dadosLoja['itens'];
     $dinheiro = $dadosLoja['dinheiro'];
 } catch (Throwable $erro) {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        http_response_code($erro instanceof DomainException ? 400 : 500);
+        http_response_code($erro instanceof DomainException ? ($erro->getCode() === 403 ? 403 : 400) : 500);
         header('Content-Type: application/json; charset=utf-8');
-        echo json_encode([
-            'sucesso' => false,
-            'mensagem' => $erro instanceof DomainException ? $erro->getMessage() : 'Ocorreu um erro ao realizar a compra.',
-        ], JSON_UNESCAPED_UNICODE);
+        echo json_encode(['sucesso' => false, 'mensagem' => $erro instanceof DomainException ? $erro->getMessage() : 'Ocorreu um erro ao realizar a compra.'], JSON_UNESCAPED_UNICODE);
         exit;
     }
     http_response_code(500);
@@ -181,6 +158,7 @@ $rotuloTipo = static function (string $tipo): string {
 </main>
 </div>
 <div class="toast hidden" id="toast" role="status"></div>
+<template id="modelo-imagem-loja"><img alt=""></template>
 <script>
 (() => {
     const csrf = <?= json_encode($csrf, JSON_UNESCAPED_UNICODE) ?>;
@@ -211,7 +189,7 @@ $rotuloTipo = static function (string $tipo): string {
         const caixaIcone = document.getElementById('icone');
         if (card.dataset.imagem) {
             caixaIcone.innerHTML = '';
-            const imgEl = document.createElement('img');
+            const imgEl = document.getElementById('modelo-imagem-loja').content.firstElementChild.cloneNode(true);
             imgEl.src = card.dataset.imagem;
             imgEl.alt = selecionado.nome;
             caixaIcone.appendChild(imgEl);

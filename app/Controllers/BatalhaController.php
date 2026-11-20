@@ -8,6 +8,7 @@ use DomainException;
 use PDO;
 use Peakmon\Models\Batalha;
 use Peakmon\Models\Mochila;
+use Peakmon\Models\Perfil;
 
 /** Controla as acoes HTTP da batalha; deixa as regras no Model e a view no PHP. */
 final class BatalhaController
@@ -51,9 +52,7 @@ final class BatalhaController
     public function prepararPagina(int $idPerfil, int $idUsuario): array
     {
         $previa = $this->batalha->prepararEncontro($idPerfil, $idUsuario);
-        $consulta = $this->pdo->prepare('SELECT nome_perfil, dinheiro FROM perfil WHERE id = :id AND id_usuario = :usuario LIMIT 1');
-        $consulta->execute(['id' => $idPerfil, 'usuario' => $idUsuario]);
-        $perfil = $consulta->fetch() ?: null;
+        $perfil = (new Perfil($this->pdo))->buscarPorIdDoUsuario($idPerfil, $idUsuario);
         return ['previa' => $previa, 'perfil' => $perfil];
     }
 }

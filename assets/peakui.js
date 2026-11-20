@@ -1,41 +1,32 @@
-/* Peakmon: dialogos personalizados. Nenhum resultado e decidido no navegador. */
+/* Dialogo seguro montado com <template> escrito no HTML (sem createElement). */
 (function () {
     'use strict';
     let aberto = false;
     function dialogo(mensagem, opcoes) {
         return new Promise((resolver) => {
             if (aberto) { resolver(false); return; }
+            const modelo = document.getElementById('peak-dialog-template');
+            if (!modelo || !modelo.content.firstElementChild) {
+                // Sem a estrutura HTML esperada, nao executa uma acao irreversivel.
+                resolver(false);
+                return;
+            }
             aberto = true;
             const anterior = document.activeElement;
-            const caixa = document.createElement('div');
-            caixa.className = 'peak-dialog-backdrop';
-            const janela = document.createElement('section');
-            janela.className = 'peak-dialog';
-            janela.setAttribute('role', 'dialog');
-            janela.setAttribute('aria-modal', 'true');
-            const titulo = document.createElement('h2');
-            titulo.className = 'peak-dialog-title';
+            const caixa = modelo.content.firstElementChild.cloneNode(true);
+            const titulo = caixa.querySelector('.peak-dialog-title');
+            const corpo = caixa.querySelector('.peak-dialog-text');
+            const confirmar = caixa.querySelector('.peak-dialog-ok');
+            let cancelar = caixa.querySelector('.peak-dialog-cancel');
             titulo.textContent = opcoes.title || 'Confirmação';
-            const corpo = document.createElement('p');
-            corpo.className = 'peak-dialog-text';
             corpo.textContent = mensagem;
-            const botoes = document.createElement('div');
-            botoes.className = 'peak-dialog-actions';
-            const confirmar = document.createElement('button');
-            confirmar.type = 'button';
-            confirmar.className = 'peak-dialog-ok';
             confirmar.textContent = opcoes.okText || 'Confirmar';
-            let cancelar = null;
-            if (!opcoes.alertOnly) {
-                cancelar = document.createElement('button');
-                cancelar.type = 'button';
-                cancelar.className = 'peak-dialog-cancel';
+            if (opcoes.alertOnly) {
+                cancelar.remove();
+                cancelar = null;
+            } else {
                 cancelar.textContent = opcoes.cancelText || 'Cancelar';
             }
-            botoes.appendChild(confirmar);
-            if (cancelar) botoes.appendChild(cancelar);
-            janela.append(titulo, corpo, botoes);
-            caixa.appendChild(janela);
             document.body.appendChild(caixa);
             const estadoAnterior = document.body.style.overflow;
             document.body.style.overflow = 'hidden';

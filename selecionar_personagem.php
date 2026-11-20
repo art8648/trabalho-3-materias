@@ -8,27 +8,16 @@ if (!isset($_SESSION['perfil_id']) || $_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
+require_once __DIR__ . '/app/autoload.php';
+
 $nome = trim((string) ($_POST['personagem'] ?? ''));
 $pdo = require __DIR__ . '/config/database.php';
-
-$consulta = $pdo->prepare('SELECT id FROM personagem WHERE nome = :nome AND jogavel = TRUE LIMIT 1');
-$consulta->execute(['nome' => $nome]);
-$idPersonagem = $consulta->fetchColumn();
-
-if ($idPersonagem === false) {
-    header('Location: menu%20inicial/selecao.html');
-    exit;
-}
-
-$atualiza = $pdo->prepare(
-    'UPDATE perfil SET id_personagem = :personagem
-     WHERE id = :perfil AND id_usuario = :usuario'
+$controller = new \Peakmon\Controllers\PersonagemController($pdo);
+$ok = $controller->selecionar(
+    (int) $_SESSION['perfil_id'],
+    (int) $_SESSION['usuario_id'],
+    $nome
 );
-$atualiza->execute([
-    'personagem' => $idPersonagem,
-    'perfil'     => $_SESSION['perfil_id'],
-    'usuario'    => $_SESSION['usuario_id'],
-]);
 
-header('Location: mapa.php');
+header('Location: ' . ($ok ? 'mapa.php' : 'menu%20inicial/selecao.html'));
 exit;
