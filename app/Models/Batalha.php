@@ -8,6 +8,7 @@ use DomainException;
 use PDO;
 use Peakmon\Exceptions\ItemInvalidoException;
 use Peakmon\Models\Condicoes\CondicaoStatus;
+use Peakmon\Models\Pokemons\PokemonFactory;
 
 /**
  * Batalha automatica estilo Pokelike.
@@ -873,11 +874,15 @@ class Batalha
      */
     private function multiplicador(array $atacante, array $alvo): float
     {
-        if ($atacante['tipo'] === 'TUDO') {
-            return 2.0;
-        }
-        if ($alvo['tipo'] === 'TUDO') {
-            return 0.5;
+        // Subclasses de Pokemon por tipo: heranca e despacho polimorfico.
+        // A tabela de multiplicadores segue no banco, sem mudar a regra da luta.
+        $pokemonAtacante = PokemonFactory::criar($atacante);
+        $pokemonAlvo = PokemonFactory::criar($alvo);
+
+        // O tipo TUDO possui regras especiais, como no codigo anterior.
+        // O PokemonTudo sobrescreve multiplicadorContra() (polimorfismo).
+        if ($pokemonAtacante->tipo() === 'TUDO' || $pokemonAlvo->tipo() === 'TUDO') {
+            return $pokemonAtacante->multiplicadorContra($pokemonAlvo, []);
         }
 
         if ($this->efetividade === null) {
@@ -890,7 +895,7 @@ class Batalha
             }
         }
 
-        return $this->efetividade[$atacante['tipo_id'] . '-' . $alvo['tipo_id']] ?? 1.0;
+        return $pokemonAtacante->multiplicadorContra($pokemonAlvo, $this->efetividade);
     }
 
     // ------------------------------------------------------------------

@@ -41,213 +41,23 @@ $roletaItens = [];
 
 try {
     $pdo = require __DIR__ . '/config/database.php';
-    $mapa = new Mapa($pdo);
-    $inicial = new Inicial($pdo);
-    $time = new Time($pdo);
-    $captura = new Captura($pdo);
-    $sinal = new SinalEstranho($pdo);
+    $controller = new \Peakmon\Controllers\MapaController($pdo);
 
-    // O mesmo arquivo recebe o clique do mapa e salva o novo ponto.
     if ($ehPost) {
         header('Content-Type: application/json; charset=utf-8');
-
-        // Clique em CONFIRMAR no pop-up: salva o Pokemon inicial do perfil.
-        if (($_POST['acao'] ?? '') === 'escolher_inicial') {
-            $idPokemon = filter_var(
-                $_POST['id_pokemon'] ?? null,
-                FILTER_VALIDATE_INT
-            );
-
-            if ($idPokemon === false || $idPokemon === null) {
-                http_response_code(400);
-                echo json_encode([
-                    'sucesso' => false,
-                    'mensagem' => 'Pokemon invalido.'
-                ], JSON_UNESCAPED_UNICODE);
-                exit;
-            }
-
-            echo json_encode(
-                $inicial->escolher($idPerfil, $idUsuario, (int) $idPokemon),
-                JSON_UNESCAPED_UNICODE
-            );
-            exit;
-        }
-
-        // Nao troca integrantes de uma equipe enquanto a luta guarda seu estado.
-        if (($_POST['acao'] ?? '') === 'mover_time' && !empty($_SESSION['peakmon_batalha_interativa'][$idPerfil])) {
-            throw new DomainException('Termine a batalha atual antes de mudar a equipe.');
-        }
-        // Painel TIME: troca dois Pokemon de posicao (ou move para uma posicao vazia).
-        if (($_POST['acao'] ?? '') === 'mover_time') {
-            $de = filter_var($_POST['de'] ?? null, FILTER_VALIDATE_INT);
-            $para = filter_var($_POST['para'] ?? null, FILTER_VALIDATE_INT);
-
-            if ($de === false || $de === null || $para === false || $para === null) {
-                http_response_code(400);
-                echo json_encode([
-                    'sucesso' => false,
-                    'mensagem' => 'Posicao invalida.'
-                ], JSON_UNESCAPED_UNICODE);
-                exit;
-            }
-
-            $time->mover($idPerfil, $idUsuario, (int) $de, (int) $para);
-
-            echo json_encode([
-                'sucesso' => true,
-                'mensagem' => 'Time atualizado.'
-            ], JSON_UNESCAPED_UNICODE);
-            exit;
-        }
-        // Botao REINICIAR: apaga o inicial e o personagem SO do perfil ativo.
-        if (($_POST['acao'] ?? '') === 'reiniciar_perfil') {
-            (new Perfil($pdo))->reiniciarEscolhas($idPerfil, $idUsuario);
-            // Uma batalha em andamento pode estar na sessao: descartar ao zerar o save.
-            unset($_SESSION['peakmon_batalha_interativa'][$idPerfil],
-                $_SESSION['peakmon_sinal'][$idPerfil], $_SESSION['peakmon_sinal_resolvido'][$idPerfil]);
-            foreach (array_keys($_SESSION['peakmon_encontro'] ?? []) as $chave) {
-                if (str_starts_with((string) $chave, $idPerfil . ':')) {
-                    unset($_SESSION['peakmon_encontro'][$chave]);
-                }
-            }
-
-            // O reinicio tambem deve devolver o saldo do perfil a zero.
-            $zerarSaldo = $pdo->prepare('UPDATE perfil SET dinheiro = 0 WHERE id = :perfil');
-            $zerarSaldo->execute(['perfil' => $idPerfil]);
-
-            echo json_encode([
-                'sucesso' => true,
-                'mensagem' => 'Perfil reiniciado.',
-                'redirecionar' => 'menu%20inicial/selecao.html'
-            ], JSON_UNESCAPED_UNICODE);
-            exit;
-        }
-        // ===== Evento "Sinal estranho": trocar um Pokemon por outro =====
-        // So funciona logo depois de chegar num ponto EVENTO (a sessao guarda esse aviso).
-        $acaoSinal = (string) ($_POST['acao'] ?? '');
-        if (in_array($acaoSinal, ['sinal_dados', 'sinal_trocar', 'sinal_ignorar'], true)) {
-            if ((int) ($_SESSION['peakmon_sinal'][$idPerfil] ?? 0) <= 0) {
-                throw new DomainException('Nenhum sinal estranho esta ativo agora.');
-            }
-
-            if ($acaoSinal === 'sinal_dados') {
-                echo json_encode([
-                    'sucesso' => true,
-                    'meus' => $sinal->listarDoJogador($idPerfil, $idUsuario),
-                    'especies' => $sinal->listarEspecies()
-                ], JSON_UNESCAPED_UNICODE);
-                exit;
-            }
-
-            if ($acaoSinal === 'sinal_ignorar') {
-                $noSinal = (int) $_SESSION['peakmon_sinal'][$idPerfil];
-                $_SESSION['peakmon_sinal_resolvido'][$idPerfil][$noSinal] = true;
-                unset($_SESSION['peakmon_sinal'][$idPerfil]);
-                echo json_encode(['sucesso' => true, 'mensagem' => 'Voce ignorou o sinal.'], JSON_UNESCAPED_UNICODE);
-                exit;
-            }
-
-            $idCapturado = filter_var($_POST['id_capturado'] ?? null, FILTER_VALIDATE_INT);
-            $idNovaEspecie = filter_var($_POST['id_especie'] ?? null, FILTER_VALIDATE_INT);
-
-            if ($idCapturado === false || $idCapturado === null || $idNovaEspecie === false || $idNovaEspecie === null) {
-                throw new DomainException('Escolha o seu Pokemon e a especie nova.');
-            }
-
-            $resultadoTroca = $sinal->trocar($idPerfil, $idUsuario, (int) $idCapturado, (int) $idNovaEspecie);
-            $noSinal = (int) $_SESSION['peakmon_sinal'][$idPerfil];
-            $_SESSION['peakmon_sinal_resolvido'][$idPerfil][$noSinal] = true;
-            unset($_SESSION['peakmon_sinal'][$idPerfil]);
-
-            echo json_encode(['sucesso' => true] + $resultadoTroca, JSON_UNESCAPED_UNICODE);
-            exit;
-        }
-
-        // Nao deixa andar pelo mapa sem ter escolhido o inicial.
-        if (!$inicial->perfilTemInicial($idPerfil)) {
-            throw new DomainException('Escolha seu Pokemon inicial antes de avancar no mapa.');
-        }
-
-        $idNoDestino = filter_var(
-            $_POST['id_no_destino'] ?? null,
-            FILTER_VALIDATE_INT
-        );
-
-        if ($idNoDestino === false || $idNoDestino === null) {
-            http_response_code(400);
-            echo json_encode([
-                'sucesso' => false,
-                'mensagem' => 'Ponto do mapa invalido.'
-            ], JSON_UNESCAPED_UNICODE);
-            exit;
-        }
-
-        // Andar para outro ponto encerra qualquer sinal que ficou pendente.
-        unset($_SESSION['peakmon_sinal'][$idPerfil]);
-
-        // Se o destino for uma Pokebola, o Captura sorteia o Pokemon na mesma transacao.
-        $resultado = $mapa->avancar(
-            $idPerfil,
-            $idUsuario,
-            (int) $idNoDestino,
-            [$captura, 'capturarAleatorio']
-        );
-
-        // Ponto EVENTO = "Sinal estranho": o navegador abre a escolha de troca.
-        if (($resultado['no']['tipo_no'] ?? '') === 'EVENTO') {
-            $noSinal = (int) $resultado['no']['id'];
-            unset($_SESSION['peakmon_sinal_resolvido'][$idPerfil][$noSinal]);
-            $_SESSION['peakmon_sinal'][$idPerfil] = $noSinal;
-            $resultado['evento'] = ['tipo' => 'SINAL_ESTRANHO'];
-        }
-
+        $resultado = $controller->processarAcao($idPerfil, $idUsuario, $_POST);
         echo json_encode($resultado, JSON_UNESCAPED_UNICODE);
         exit;
     }
 
-    // O modal do inicial precisa ser preparado ANTES do mapa.
-    // Assim, uma falha no carregamento dos nos nao esconde a escolha.
-    if (!$inicial->perfilTemInicial($idPerfil)) {
-        $iniciais = $inicial->listar();
-        $mostrarInicial = count($iniciais) > 0;
-    }
-
-    $slotsTime = $time->listar($idPerfil);
-    $dados = $mapa->carregarMapa($idPerfil, $idUsuario);
-    // Nome do personagem escolhido no perfil (Link, The Knight, Mereoleona...).
-    $consultaPersonagem = $pdo->prepare('
-        SELECT c.nome
-        FROM perfil p
-        JOIN personagem c ON c.id = p.id_personagem
-        WHERE p.id = :id_perfil AND p.id_usuario = :id_usuario
-        LIMIT 1
-    ');
-    $consultaPersonagem->execute(['id_perfil' => $idPerfil, 'id_usuario' => $idUsuario]);
-    $personagemNome = $consultaPersonagem->fetchColumn() ?: null;
-    // Pokemon que aparecem na roleta (so desenha; o sorteio e feito no servidor).
-    $roleta = $captura->listarRoleta();
-    // Itens que aparecem na roleta do "Item escondido" (so desenha; o sorteio e no servidor).
-    $roletaItens = $mapa->listarRoletaItens();
-    // Sprite de cada item (as mesmas imagens da Mochila e da Loja, em images/itens/).
-    // Se o arquivo nao existir, a roleta cai de volta no emoji.
-    $arquivosItens = [
-        'Potion' => 'potion.jpg', 'Super Potion' => 'super_potion.webp',
-        'Hyper Potion' => 'hyper_potion.webp', 'Max Potion' => 'max_potion.webp',
-        'Full Restore' => 'full_restore.jpg', 'Antidote' => 'antidote.webp',
-        'Burn Heal' => 'burn_heal.webp', 'Ice Heal' => 'ice_heal.webp',
-        'Awakening' => 'awakening.webp', 'Paralyze Heal' => 'paralyze_heal.webp',
-        'Full Heal' => 'full_heal.webp', 'Revive' => 'revive.webp',
-        'Pedra Universal' => 'pedra_universal.png',
-    ];
-    foreach ($roletaItens as &$itemRoleta) {
-        $arquivo = $arquivosItens[$itemRoleta['nome']] ?? '';
-        $itemRoleta['imagem'] = ($arquivo !== '' && is_file(__DIR__ . '/images/itens/' . $arquivo))
-            ? 'images/itens/' . $arquivo
-            : '';
-    }
-    unset($itemRoleta);
-
+    $pagina = $controller->carregarPagina($idPerfil, $idUsuario, __DIR__);
+    $mostrarInicial = $pagina['mostrarInicial'];
+    $personagemNome = $pagina['personagemNome'];
+    $iniciais = $pagina['iniciais'];
+    $slotsTime = $pagina['slotsTime'];
+    $dados = $pagina['dados'];
+    $roleta = $pagina['roleta'];
+    $roletaItens = $pagina['roletaItens'];
 } catch (DomainException $erro) {
     if ($ehPost) {
         http_response_code(400);

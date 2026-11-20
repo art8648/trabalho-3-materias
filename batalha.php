@@ -39,55 +39,26 @@ $mensagemErro = null;
 
 try {
     $pdo = require __DIR__ . '/config/database.php';
-    $batalha = new Batalha($pdo);
-
-    // POST: o navegador pede para lutar. O servidor simula tudo e devolve os eventos.
+    $controller = new \Peakmon\Controllers\BatalhaController($pdo, new Batalha($pdo), new Mochila($pdo));
     if ($ehPost) {
         header('Content-Type: application/json; charset=utf-8');
-
         if (!hash_equals($csrf, (string) ($_POST['csrf'] ?? ''))) {
             http_response_code(403);
-            echo json_encode([
-                'sucesso' => false,
-                'mensagem' => 'A solicitacao expirou. Atualize a pagina.'
-            ], JSON_UNESCAPED_UNICODE);
+            echo json_encode(['sucesso' => false, 'mensagem' => 'A solicitacao expirou. Atualize a pagina.'], JSON_UNESCAPED_UNICODE);
             exit;
         }
-
-        $acao = (string) ($_POST['acao'] ?? '');
-        if ($acao === 'iniciar') {
-            $resultado = $batalha->iniciarTurnos($idPerfil, $idUsuario);
-        } elseif ($acao === 'rodada') {
-            $resultado = $batalha->executarTurno($idPerfil, $idUsuario);
-        } elseif ($acao === 'item') {
-            $idItem = filter_var($_POST['id_item'] ?? null, FILTER_VALIDATE_INT);
-            $idAlvo = filter_var($_POST['id_capturado'] ?? null, FILTER_VALIDATE_INT);
-            if (!$idItem || !$idAlvo || $idItem < 1 || $idAlvo < 1) {
-                throw new DomainException('Selecione um item e um Pokemon do time.');
-            }
-            $resultado = $batalha->executarTurno($idPerfil, $idUsuario, $idItem, $idAlvo);
-        } else {
-            http_response_code(400);
-            echo json_encode(['sucesso' => false, 'mensagem' => 'Acao invalida.'], JSON_UNESCAPED_UNICODE);
-            exit;
-        }
-        $resultado['itens'] = (new Mochila($pdo))->listarItens($idPerfil, $idUsuario);
+        $resultado = $controller->executarAcao($idPerfil, $idUsuario, $csrf, $_POST);
         echo json_encode($resultado, JSON_UNESCAPED_UNICODE);
         exit;
     }
-
-    $previa = $batalha->prepararEncontro($idPerfil, $idUsuario);
-
-    $consultaPerfil = $pdo->prepare('SELECT nome_perfil, dinheiro FROM perfil WHERE id = :id AND id_usuario = :usuario LIMIT 1');
-    $consultaPerfil->execute(['id' => $idPerfil, 'usuario' => $idUsuario]);
-    $linhaPerfil = $consultaPerfil->fetch();
-    if ($linhaPerfil !== false) {
-        $perfil = $linhaPerfil;
+    $pagina = $controller->prepararPagina($idPerfil, $idUsuario);
+    $previa = $pagina['previa'];
+    if ($pagina['perfil'] !== null) {
+        $perfil = $pagina['perfil'];
     }
-
 } catch (DomainException $erro) {
     if ($ehPost) {
-        http_response_code(400);
+        http_response_code($erro->getCode() === 403 ? 403 : 400);
         header('Content-Type: application/json; charset=utf-8');
         echo json_encode(['sucesso' => false, 'mensagem' => $erro->getMessage()], JSON_UNESCAPED_UNICODE);
         exit;
