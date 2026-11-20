@@ -1,0 +1,17 @@
+.peak-dialog-backdrop { position:fixed; inset:0; z-index:99999; display:grid; place-items:center; padding:20px; background:rgba(11,29,34,.78); backdrop-filter:blur(4px); }
+.peak-dialog { box-sizing:border-box; width:min(450px,100%); padding:clamp(18px,4vw,28px); background:#fff5d8; color:#302d35; border:4px solid #273b45; box-shadow:0 0 0 4px #f5ca66, 10px 10px 0 rgba(0,0,0,.35); font-family:'Pixelify Sans',ui-monospace,Consolas,monospace; text-align:center; }
+.peak-dialog-title { margin:0 0 12px; font-size:clamp(20px,4vw,27px); color:#993c36; letter-spacing:1px; text-shadow:none; }
+.peak-dialog-text { margin:0 0 23px; white-space:pre-line; font-size:clamp(14px,2.5vw,17px); line-height:1.6; }
+.peak-dialog-actions { display:flex; flex-wrap:wrap; justify-content:center; gap:10px; }
+.peak-dialog-actions button { min-width:116px; padding:11px 17px; font:700 15px 'Pixelify Sans',ui-monospace,Consolas,monospace; border:3px solid #293a3f; box-shadow:3px 3px 0 #293a3f; cursor:pointer; }
+.peak-dialog-ok { background:#89ce90; color:#173b29; }
+.peak-dialog-ok.danger { background:#eb877e; color:#471d1a; }
+.peak-dialog-cancel { background:#f2e5ca; color:#424046; }
+.peak-dialog-actions button:hover { filter:brightness(1.05); transform:translateY(-1px); }
+.peak-dialog-actions button:focus-visible { outline:3px solid #2174cb; outline-offset:3px; }
+
+/* Confirmacao principal a esquerda, verde; Cancelar a direita, vermelho. */
+.peak-dialog-actions { flex-direction: row; }
+.peak-dialog-ok, .peak-dialog-ok.danger { background:#8ed59c; color:#18452b; }
+.peak-dialog-cancel { background:#eb877e; color:#4d1616; }
+@media(max-width:370px) { .peak-dialog-actions button { min-width:0; flex:1 1 105px; } }

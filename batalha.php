@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 use Peakmon\Models\Batalha;
+use Peakmon\Models\Mochila;
 
 require_once __DIR__ . '/app/sessao.php';
 require_once __DIR__ . '/app/autoload.php';
@@ -53,13 +54,25 @@ try {
             exit;
         }
 
-        if (($_POST['acao'] ?? '') !== 'lutar') {
+        $acao = (string) ($_POST['acao'] ?? '');
+        if ($acao === 'iniciar') {
+            $resultado = $batalha->iniciarTurnos($idPerfil, $idUsuario);
+        } elseif ($acao === 'rodada') {
+            $resultado = $batalha->executarTurno($idPerfil, $idUsuario);
+        } elseif ($acao === 'item') {
+            $idItem = filter_var($_POST['id_item'] ?? null, FILTER_VALIDATE_INT);
+            $idAlvo = filter_var($_POST['id_capturado'] ?? null, FILTER_VALIDATE_INT);
+            if (!$idItem || !$idAlvo || $idItem < 1 || $idAlvo < 1) {
+                throw new DomainException('Selecione um item e um Pokemon do time.');
+            }
+            $resultado = $batalha->executarTurno($idPerfil, $idUsuario, $idItem, $idAlvo);
+        } else {
             http_response_code(400);
             echo json_encode(['sucesso' => false, 'mensagem' => 'Acao invalida.'], JSON_UNESCAPED_UNICODE);
             exit;
         }
-
-        echo json_encode($batalha->lutar($idPerfil, $idUsuario), JSON_UNESCAPED_UNICODE);
+        $resultado['itens'] = (new Mochila($pdo))->listarItens($idPerfil, $idUsuario);
+        echo json_encode($resultado, JSON_UNESCAPED_UNICODE);
         exit;
     }
 
@@ -125,6 +138,7 @@ if ($previa !== null) {
         'slots' => array_values($slots),
         'inimigos' => $previa['inimigos'],
         'podeLutar' => $previa['pode_lutar'],
+        'itens' => (new Mochila($pdo))->listarItens($idPerfil, $idUsuario),
     ];
 }
 ?>
@@ -442,6 +456,47 @@ if ($previa !== null) {
         .resultado.derrota h2 { color: #a84d38; }
         .resultado .botoes { margin-top: 14px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
 
+        .painel-combate {
+            margin: 12px 0 0; padding: 12px;
+            border: 3px solid #30383f; background: #f1ead7;
+        }
+        .painel-combate .cabecalho { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+        .painel-combate h2 { font-size: 16px; margin: 0; }
+        .painel-combate .botoes { display: flex; flex-wrap: wrap; gap: 7px; }
+        .painel-combate .botoes .botao { font-size: 12px; padding: 9px 12px; }
+        .mochila-combate {
+            padding: 12px; margin-top: 10px; border: 2px solid #6f8b80;
+            background: #fcfef7;
+        }
+        .mochila-combate[hidden] { display: none; }
+        .mochila-combate .campos { display: flex; flex-wrap: wrap; gap: 12px; margin: 12px 0; }
+        .mochila-combate label { display: flex; flex: 1 1 160px; flex-direction: column; gap: 5px; font-weight: bold; }
+        .mochila-combate select { font: 14px monospace; padding: 9px; border: 2px solid #34483d; max-width: 100%; }
+        .dica-combate { font-size: 12px; margin: 9px 0 0; min-height: 18px; }
+        .dica-combate.com-erro { color: #9f362c; }
+
+        /* Desktop: comandos persistentes na lateral; tela menor: empilhar. */
+        .arena-bloco { display:grid; grid-template-columns:minmax(0,1fr) minmax(236px,290px);
+            grid-template-areas:"inimigo painel" "arena painel" "jogador painel" "registro painel";
+            gap:12px 17px; align-items:start; }
+        .arena-bloco[hidden], [hidden] { display:none !important; }
+        #fila-inimigo { grid-area:inimigo; }
+        #arena { grid-area:arena; }
+        #fila-jogador { grid-area:jogador; }
+        .rodape-arena { grid-area:registro; }
+        #painel-combate { grid-area:painel; margin:0; position:sticky; top:12px;
+            max-height:calc(100vh - 24px); overflow-y:auto; }
+        #painel-combate .cabecalho { display:block; }
+        #painel-combate .botoes { display:grid; grid-template-columns:1fr; margin-top:12px; }
+        #painel-combate .botoes .botao { width:100%; }
+        .mochila-combate .campos { display:grid; grid-template-columns:minmax(0,1fr); }
+        .mochila-combate label { min-width:0; }
+        @media (max-width: 1040px) {
+            .arena-bloco { grid-template-columns:minmax(0,1fr); grid-template-areas:"inimigo" "arena" "jogador" "painel" "registro"; }
+            #painel-combate { position:static; max-height:none; overflow:visible; }
+            #painel-combate .botoes { display:flex; flex-wrap:wrap; }
+            #painel-combate .botoes .botao { width:auto; }
+        }
         @media (max-width: 800px) {
             .previa { grid-template-columns: minmax(0, 1fr); }
             .rodape-arena { grid-template-columns: minmax(0, 1fr); }
@@ -456,6 +511,7 @@ if ($previa !== null) {
             .barra > span, .fila .chip, .sprite.fora { transition: none; }
         }
     </style>
+    <link rel="stylesheet" href="assets/peakui.css">
 </head>
 <body>
 
@@ -465,6 +521,7 @@ if ($previa !== null) {
         <span> | Pokédollars: <strong id="ouro"><?= (int) $perfil['dinheiro'] ?></strong></span>
     </div>
     <div>
+        <a class="botao" href="historico.php">📜 Histórico</a>
         <a class="botao" id="voltar-mapa" href="mapa.php">⇦ Voltar ao mapa</a>
     </div>
 </header>
@@ -527,6 +584,27 @@ if ($previa !== null) {
                     <button type="button" class="botao" data-velocidade="4" aria-pressed="false">4x</button>
                     <button type="button" class="botao" id="botao-pular">Pular</button>
                 </div>
+            </div>
+            <div class="painel-combate" id="painel-combate">
+                <div class="cabecalho">
+                    <h2>⚔ Batalha em andamento</h2>
+                    <div class="botoes">
+                        <button class="botao" type="button" id="botao-pausar">⏸ Pausar</button>
+                        <button class="botao" type="button" id="botao-itens">🎒 Usar item</button>
+                        <button class="botao" type="button" id="botao-proximo" hidden>▶ Próximo turno</button>
+                    </div>
+                </div>
+                <div class="mochila-combate" id="mochila-combate" hidden>
+                    <strong>Use uma Potion, cura de status ou Revive.</strong>
+                    <p>Usar um item consome sua ação na rodada; o inimigo ainda ataca.</p>
+                    <div class="campos">
+                        <label>Item disponível<select id="escolher-item"></select></label>
+                        <label>Pokémon do time<select id="escolher-alvo"></select></label>
+                    </div>
+                    <button class="botao principal" id="botao-usar" type="button">Aplicar item</button>
+                    <button class="botao" id="botao-fechar-itens" type="button">Fechar</button>
+                </div>
+                <p id="dica-combate" class="dica-combate" role="status">A batalha avança automaticamente. Pause para escolher um item.</p>
             </div>
         </section>
 
@@ -736,6 +814,7 @@ if ($previa !== null) {
                 placa[lado].textContent = '';
                 placa[lado].appendChild(criar('strong', '', lutador.nome));
                 placa[lado].appendChild(criar('span', 'tipo', ' ' + lutador.tipo));
+                if (lutador.status) placa[lado].appendChild(criar('span', 'tipo', ' • ' + lutador.status));
 
                 const barra = criar('div', 'barra');
                 const preenchimento = criar('span', classeHp(atual, lutador.hp_max));
@@ -827,22 +906,44 @@ if ($previa !== null) {
                 $('fase-arena').hidden = false;
                 sprite.jogador.classList.add('fora');
                 sprite.inimigo.classList.add('fora');
-                desenharFila('jogador', 0);
-                desenharFila('inimigo', 0);
+                desenharFila('jogador', res.iJ ?? 0);
+                desenharFila('inimigo', res.iI ?? 0);
                 $('fase-arena').scrollIntoView({ behavior: reduzirMovimento ? 'auto' : 'smooth', block: 'start' });
             }
 
-            async function reproduzir(res) {
-                abrir(res);
-                await dormir(500);
-
+            async function reproduzir(res, primeira = false) {
+                if (primeira) {
+                    abrir(res);
+                    await dormir(400);
+                }
                 for (const ev of res.eventos) {
                     registrar(ev);
                     if (ev.tipo === 'entra') await entra(ev);
                     else if (ev.tipo === 'ataque') await ataque(ev);
                     else if (ev.tipo === 'desmaia') await desmaia(ev);
+                    else if (ev.tipo === 'item') {
+                        times.jogador[ev.i].status = ev.status;
+                        if (ev.i === (res.iJ ?? ev.i)) {
+                            atualizarHp('jogador', ev.i, ev.hp_alvo);
+                            desenharPlaca('jogador', ev.i);
+                        } else { hp.jogador[ev.i] = ev.hp_alvo; desenharFila('jogador', res.iJ); }
+                        await dormir(650);
+                    } else if (ev.tipo === 'status') {
+                        times[ev.lado][ev.i].status = ev.status;
+                        if (ev.i === (ev.lado === 'jogador' ? res.iJ : res.iI)) desenharPlaca(ev.lado, ev.i);
+                        await dormir(350);
+                    } else if (ev.tipo === 'efeito_status') {
+                        atualizarHp(ev.lado, ev.i, ev.hp_alvo);
+                        await dormir(500);
+                    }
                 }
-                await dormir(500);
+                // Mantem HP dos membros do time em sincronia com a rodada do servidor.
+                times.jogador = res.jogador;
+                times.inimigo = res.inimigo;
+                hp.jogador = res.jogador.map(l => l.hp);
+                hp.inimigo = res.inimigo.map(l => l.hp);
+                desenharFila('jogador', res.iJ);
+                desenharFila('inimigo', res.iI);
             }
 
             // Controles de velocidade e pular
@@ -870,9 +971,16 @@ if ($previa !== null) {
                 caixa.appendChild(criar('div', 'ouro', '+' + res.dinheiro_ganho + ' Pokédollars'));
                 if (res.area_concluida) {
                     caixa.appendChild(criar('p', '', 'Área concluída! Você recebeu ' + res.pedras + ' Pedras Universais.'));
+                    if (DADOS.adversario && DADOS.adversario.nome === 'Hiago') {
+                        caixa.appendChild(criar('p', 'area-desbloqueada',
+                            '🔓 A Área 2 foi desbloqueada! Continue para enfrentar Bigolin.'));
+                    }
                 } else {
                     caixa.appendChild(criar('p', '', 'O caminho à frente foi liberado no mapa.'));
                 }
+            } else if (res.perfil_reiniciado) {
+                caixa.appendChild(criar('h2', '', '💀 Você perdeu!'));
+                caixa.appendChild(criar('p', '', 'Todos os seus Pokémon desmaiaram. Seu progresso neste perfil foi apagado e você vai voltar para a seleção de personagem.'));
             } else {
                 caixa.appendChild(criar('h2', '', 'Derrota'));
                 caixa.appendChild(criar('p', '', res.time_curado
@@ -885,6 +993,13 @@ if ($previa !== null) {
                 const continuar = criar('a', 'botao principal', 'Continuar');
                 continuar.href = 'mapa.php';
                 botoes.appendChild(continuar);
+            } else if (res.perfil_reiniciado) {
+                // Sem "tentar de novo": o perfil foi reiniciado, so resta recomecar.
+                const recomecar = criar('a', 'botao principal', 'Voltar à seleção de personagem');
+                recomecar.href = res.redirecionar || 'menu%20inicial/selecao.html';
+                botoes.appendChild(recomecar);
+                const voltarMapa = $('voltar-mapa');
+                if (voltarMapa) voltarMapa.hidden = true;
             } else {
                 const repetir = criar('a', 'botao principal', 'Tentar de novo');
                 repetir.href = 'batalha.php';
@@ -899,48 +1014,135 @@ if ($previa !== null) {
             botoes.querySelector('a').focus();
         }
 
-        // ---------- botao LUTAR ----------
+        // ---------- batalha automatica com pausa para itens entre rodadas ----------
         (function () {
             const botao = $('botao-lutar');
             const dica = $('dica-lutar');
+            const texto = $('dica-combate');
+            const pausar = $('botao-pausar');
+            const proximo = $('botao-proximo');
+            const itens = $('botao-itens');
+            const painel = $('mochila-combate');
+            const seletorItem = $('escolher-item');
+            const seletorAlvo = $('escolher-alvo');
+            const aplicar = $('botao-usar');
+            let pausado = false;
+            let processando = false;
+            let terminou = false;
+            let time = [];
+            let inventario = DADOS.itens || [];
+            let comecou = false;
 
-            botao.addEventListener('click', async () => {
-                botao.disabled = true;
-                Previa.bloquear(true);
-                dica.classList.remove('com-erro');
-                dica.textContent = 'Preparando a batalha...';
+            async function pedir(acao, outros = {}) {
+                const dados = new URLSearchParams({ acao, csrf: DADOS.csrf, ...outros });
+                const resposta = await fetch('batalha.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' },
+                    body: dados.toString()
+                });
+                const resultado = await resposta.json();
+                if (!resposta.ok || !resultado.sucesso) throw new Error(resultado.mensagem || 'Falha na rodada.');
+                if (resultado.itens) inventario = resultado.itens;
+                time = resultado.jogador;
+                return resultado;
+            }
 
-                const dados = new URLSearchParams();
-                dados.set('acao', 'lutar');
-                dados.set('csrf', DADOS.csrf);
+            function montarSeletores() {
+                seletorItem.replaceChildren();
+                inventario.filter(i => i.tipo_efeito !== 'PEDRA_EVOLUCAO').forEach((item) => {
+                    const o = document.createElement('option');
+                    o.value = item.id;
+                    o.textContent = item.nome + ' (' + item.quantidade + ')';
+                    seletorItem.appendChild(o);
+                });
+                seletorAlvo.replaceChildren();
+                time.forEach((pokemon) => {
+                    const o = document.createElement('option');
+                    o.value = pokemon.id_capturado;
+                    o.textContent = pokemon.nome + ' — ' + pokemon.hp + '/' + pokemon.hp_max + ' HP' +
+                        (pokemon.status ? ' • ' + pokemon.status : '') + (pokemon.hp <= 0 ? ' • desmaiado' : '');
+                    seletorAlvo.appendChild(o);
+                });
+                aplicar.disabled = !seletorItem.options.length || processando;
+            }
 
-                let res;
+            function atualizarControles() {
+                pausar.textContent = pausado ? '▶ Continuar' : '⏸ Pausar';
+                proximo.hidden = !pausado || terminou;
+                pausar.disabled = terminou;
+                itens.disabled = terminou;
+                aplicar.disabled = terminou || processando || !seletorItem.options.length;
+            }
+
+            async function executar(acao, campos = {}) {
+                if (processando || terminou) return;
+                processando = true;
+                atualizarControles();
                 try {
-                    const resposta = await fetch('batalha.php', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/x-www-form-urlencoded',
-                            'X-Requested-With': 'XMLHttpRequest'
-                        },
-                        body: dados.toString()
-                    });
-                    res = await resposta.json();
-                    if (!resposta.ok || !res.sucesso) {
-                        throw new Error(res.mensagem || 'Não foi possível iniciar a batalha.');
+                    const res = await pedir(acao, campos);
+                    texto.classList.remove('com-erro');
+                    await Arena.reproduzir(res, !comecou);
+                    comecou = true;
+                    montarSeletores();
+                    if (res.finalizada) {
+                        terminou = true;
+                        pausado = true;
+                        painel.hidden = true;
+                        $('voltar-mapa').hidden = false;
+                        mostrarResultado(res);
+                        texto.textContent = 'Batalha concluída.';
+                    } else {
+                        texto.textContent = pausado ? 'Pausado: use um item ou avance uma rodada.' : 'Batalha automática em andamento...';
                     }
                 } catch (erro) {
-                    dica.classList.add('com-erro');
-                    dica.textContent = erro.message;
+                    pausado = true;
+                    texto.textContent = erro.message;
+                    texto.classList.add('com-erro');
+                } finally {
+                    processando = false;
+                    montarSeletores();
+                    atualizarControles();
+                }
+                if (!pausado && !terminou) void executar('rodada');
+            }
+
+            botao.addEventListener('click', async () => {
+                if (processando || comecou) return;
+                botao.disabled = true;
+                Previa.bloquear(true);
+                dica.textContent = 'Preparando os lutadores...';
+                $('voltar-mapa').hidden = true;
+                await executar('iniciar');
+                if (!comecou) {
+                    // Falha ao iniciar (ex.: sem Pokemon com HP): permite nova tentativa.
                     botao.disabled = false;
                     Previa.bloquear(false);
-                    return;
+                    $('voltar-mapa').hidden = false;
+                    dica.classList.add('com-erro');
+                    dica.textContent = texto.textContent;
                 }
-
-                // A batalha ja esta salva no servidor; daqui para frente e so animacao.
-                $('voltar-mapa').hidden = true;
-                await Arena.reproduzir(res);
-                $('voltar-mapa').hidden = false;
-                mostrarResultado(res);
+            });
+            pausar.addEventListener('click', () => {
+                pausado = !pausado;
+                if (!pausado) painel.hidden = true;
+                atualizarControles();
+                if (!pausado && !processando && !terminou) void executar('rodada');
+            });
+            proximo.addEventListener('click', () => { if (!processando) void executar('rodada'); });
+            itens.addEventListener('click', () => {
+                pausado = true;
+                painel.hidden = false;
+                montarSeletores();
+                atualizarControles();
+                texto.textContent = 'Escolha o item e o Pokémon que deve recebê-lo.';
+            });
+            $('botao-fechar-itens').addEventListener('click', () => { painel.hidden = true; });
+            aplicar.addEventListener('click', async () => {
+                if (processando || !seletorItem.value || !seletorAlvo.value) return;
+                pausado = true;
+                texto.classList.remove('com-erro');
+                await executar('item', { id_item: seletorItem.value, id_capturado: seletorAlvo.value });
+                if (!texto.classList.contains('com-erro')) painel.hidden = true;
             });
         })();
     </script>

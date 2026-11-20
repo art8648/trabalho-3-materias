@@ -39,7 +39,7 @@ class Mochila
         $this->validarDonoPerfil($idPerfil, $idUsuario);
         $consulta = $this->pdo->prepare('
             SELECT tp.posicao, pc.id AS id_capturado, pc.hp_atual, pc.desmaiado,
-                   pc.status_condicao, p.nome, p.imagem, p.hp AS hp_max,
+                   pc.status_condicao, pc.sexo, p.nome, p.imagem, p.hp AS hp_max,
                    t.nome AS tipo
             FROM times tm
             INNER JOIN time_pokemon tp ON tp.id_time = tm.id
@@ -103,12 +103,43 @@ class Mochila
                 throw new DomainException('Esse Pokemon ja esta na equipe.');
             }
 
-            $vaga = $this->pdo->prepare('SELECT id FROM time_pokemon WHERE id_time = :time AND posicao = :posicao FOR UPDATE');
-            $vaga->execute(['time' => $idTime, 'posicao' => $posicao]);
-            $idLinhaAntiga = $vaga->fetchColumn();
-            if ($idLinhaAntiga !== false) {
-                $remover = $this->pdo->prepare('DELETE FROM time_pokemon WHERE id = :id AND id_time = :time');
-                $remover->execute(['id' => $idLinhaAntiga, 'time' => $idTime]);
+            // Insercao em fila: o ocupante do slot escolhido e os seguintes
+            // descem uma posicao ate a primeira vaga. Se as cinco posicoes
+            // estiverem ocupadas a partir do destino, o quinto vai ao Arquivo.
+            // Atualizamos em ordem decrescente para nao violar UNIQUE(id_time,posicao).
+            $consultaSlots = $this->pdo->prepare('
+                SELECT id, posicao FROM time_pokemon
+                WHERE id_time = :time AND posicao BETWEEN :inicio AND 5
+                ORDER BY posicao ASC FOR UPDATE
+            ');
+            $consultaSlots->execute(['time' => $idTime, 'inicio' => $posicao]);
+            $ocupados = [];
+            foreach ($consultaSlots->fetchAll(PDO::FETCH_ASSOC) as $linhaSlot) {
+                $ocupados[(int) $linhaSlot['posicao']] = (int) $linhaSlot['id'];
+            }
+            if (isset($ocupados[$posicao])) {
+                $primeiraVaga = null;
+                for ($p = $posicao; $p <= 5; $p++) {
+                    if (!isset($ocupados[$p])) {
+                        $primeiraVaga = $p;
+                        break;
+                    }
+                }
+                if ($primeiraVaga === null) {
+                    // O slot 5 fica guardado, nunca e inserido na posicao 6.
+                    $removerQuinto = $this->pdo->prepare('DELETE FROM time_pokemon WHERE id_time = :time AND posicao = 5');
+                    $removerQuinto->execute(['time' => $idTime]);
+                    $primeiraVaga = 5;
+                }
+                $empurrar = $this->pdo->prepare('
+                    UPDATE time_pokemon SET posicao = :destino
+                    WHERE id = :id AND id_time = :time
+                ');
+                for ($p = $primeiraVaga - 1; $p >= $posicao; $p--) {
+                    if (isset($ocupados[$p])) {
+                        $empurrar->execute(['destino' => $p + 1, 'id' => $ocupados[$p], 'time' => $idTime]);
+                    }
+                }
             }
 
             $inserir = $this->pdo->prepare('
@@ -116,6 +147,8 @@ class Mochila
                 VALUES (:time, NULL, :capturado, :posicao)
             ');
             $inserir->execute(['time' => $idTime, 'capturado' => $idCapturado, 'posicao' => $posicao]);
+            (new Historico($this->pdo))->registrar($idPerfil, 'TIME_ATUALIZADO',
+                'Pokemon do Arquivo Bigolin inserido na posicao ' . $posicao . '; integrantes seguintes deslocados quando necessario.');
             $this->pdo->commit();
         } catch (\Throwable $erro) {
             if ($this->pdo->inTransaction()) {
@@ -140,8 +173,16 @@ class Mochila
             if ($idLinha === false) {
                 throw new DomainException('Essa posicao ja esta vazia.');
             }
+            // O time nunca pode ficar sem Pokemon: o ultimo nao pode ir para a reserva.
+            $integrantes = $this->pdo->prepare('SELECT id FROM time_pokemon WHERE id_time = :time AND posicao BETWEEN 1 AND 5 FOR UPDATE');
+            $integrantes->execute(['time' => $idTime]);
+            if (count($integrantes->fetchAll(PDO::FETCH_COLUMN)) <= 1) {
+                throw new DomainException('O time precisa ter pelo menos um Pokemon.');
+            }
             $remover = $this->pdo->prepare('DELETE FROM time_pokemon WHERE id = :id AND id_time = :time');
             $remover->execute(['id' => $idLinha, 'time' => $idTime]);
+            (new Historico($this->pdo))->registrar($idPerfil, 'POKEMON_GUARDADO',
+                'Pokemon da posicao ' . $posicao . ' enviado ao Arquivo Bigolin.');
             $this->pdo->commit();
         } catch (\Throwable $erro) {
             if ($this->pdo->inTransaction()) {
@@ -261,6 +302,8 @@ class Mochila
             ]);
 
             $this->consumirItem($idInventario, $idItem, (int) $item['quantidade']);
+            (new Historico($this->pdo))->registrar($idPerfil, 'ITEM_UTILIZADO',
+                $item['nome'] . ' usado em ' . $pokemon['nome'] . '. ' . $mensagem);
             $this->pdo->commit();
             return $mensagem;
         } catch (\Throwable $erro) {
@@ -373,6 +416,8 @@ class Mochila
             $evoluir = $this->pdo->prepare('UPDATE pokemon_capturado SET id_pokemon = :destino, hp_atual = :hp, desmaiado = :desmaiado WHERE id = :id AND id_perfil = :perfil');
             $evoluir->execute(['destino' => $idDestino, 'hp' => $hpNovo, 'desmaiado' => $desmaiadoNovo, 'id' => $idCapturado, 'perfil' => $idPerfil]);
             $this->consumirItem($idInventario, (int) $dadosPedra['id'], (int) $dadosPedra['quantidade']);
+            (new Historico($this->pdo))->registrar($idPerfil, 'POKEMON_EVOLUIDO',
+                $pokemon['nome'] . ' evoluiu para ' . $nomeDestino . ' usando Pedra Universal.');
             $this->pdo->commit();
             return $pokemon['nome'] . ' evoluiu para ' . $nomeDestino . '!';
         } catch (\Throwable $erro) {

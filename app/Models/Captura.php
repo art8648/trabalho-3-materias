@@ -15,6 +15,11 @@ use PDO;
  */
 class Captura
 {
+    /** Evita as ultimas cinco capturas quando ainda ha outras especies. */
+    private const RECENTES_A_EVITAR = 5;
+    /** Chance de priorizar especies ainda nao capturadas pelo perfil. */
+    private const CHANCE_INEDITO = 85;
+
     /** Pokemon que aparecem na roleta (nomes como estao na tabela pokemon). */
     public const NOMES = [
         'Taillow',
@@ -78,8 +83,26 @@ class Captura
             throw new DomainException('Nenhum Pokemon da roleta foi encontrado no banco de dados.');
         }
 
-        // O sorteio e feito aqui, no servidor: o navegador so anima o resultado.
-        $especie = $especies[random_int(0, count($especies) - 1)];
+        // O sorteio e feito no servidor: evita as cinco especies mais recentes,
+        // e normalmente prioriza Pokemon ainda nao descobertos neste perfil.
+        $consulta = $this->pdo->prepare('SELECT id_pokemon FROM pokemon_capturado
+            WHERE id_perfil = :perfil ORDER BY id DESC');
+        $consulta->execute(['perfil' => $idPerfil]);
+        $historico = array_map('intval', $consulta->fetchAll(PDO::FETCH_COLUMN));
+        $recentes = array_slice($historico, 0, self::RECENTES_A_EVITAR);
+        $possiveis = array_values(array_filter($especies, static function (array $p) use ($recentes): bool {
+            return !in_array((int) $p['id'], $recentes, true);
+        }));
+        if ($possiveis === []) {
+            $possiveis = $especies;
+        }
+        $ineditos = array_values(array_filter($possiveis, static function (array $p) use ($historico): bool {
+            return !in_array((int) $p['id'], $historico, true);
+        }));
+        if ($ineditos !== [] && random_int(1, 100) <= self::CHANCE_INEDITO) {
+            $possiveis = $ineditos;
+        }
+        $especie = $possiveis[random_int(0, count($possiveis) - 1)];
 
         $sexo = ((bool) $especie['possui_sexo'])
             ? (random_int(0, 1) === 1 ? 'M' : 'F')

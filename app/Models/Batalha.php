@@ -6,6 +6,7 @@ namespace Peakmon\Models;
 
 use DomainException;
 use PDO;
+use Peakmon\Exceptions\ItemInvalidoException;
 
 /**
  * Batalha automatica estilo Pokelike.
@@ -30,6 +31,15 @@ class Batalha
 
     /** Ao perder, o time e curado (Centro Pokemon) e o jogador pode tentar de novo. */
     public const CURAR_TIME_AO_PERDER = true;
+
+    /**
+     * Derrota total (todos os Pokemon do time desmaiaram): o perfil e reiniciado,
+     * igual ao botao "Reiniciar perfil" do mapa, e o jogador volta a selecao de personagem.
+     */
+    public const REINICIAR_PERFIL_AO_PERDER = true;
+
+    /** Para onde o navegador vai depois de uma derrota total. */
+    private const PAGINA_SELECAO = 'menu%20inicial/selecao.html';
 
     /** Chance (%) de golpe critico. */
     private const CHANCE_CRITICO = 6;
@@ -166,6 +176,8 @@ class Batalha
             // ---- A batalha acontece aqui ----
             $sim = $this->simular($lutadores, $encontro['inimigos'], $encontro['fator'], $encontro['adversario']['nome']);
 
+            array_unshift($sim['eventos'], ['tipo' => 'inicio', 'turno' => 0,
+                'msg' => 'Batalha iniciada contra ' . $encontro['adversario']['nome'] . '.']);
             $this->gravarLog($idBatalha, $sim['eventos'], $lutadores, $encontro['inimigos']);
             $this->gravarHpDoTime($idPerfil, $sim['jogador_final']);
 
@@ -180,7 +192,7 @@ class Batalha
             // Os triggers pagam o ouro e, no chefe, as Pedras Universais.
             $encerrar = $this->pdo->prepare('
                 UPDATE batalha
-                SET resultado = :resultado, dinheiro_ganho = :ouro
+                SET resultado = :resultado, dinheiro_ganho = :ouro, data_fim = CURRENT_TIMESTAMP
                 WHERE id = :id AND resultado = \'EM_ANDAMENTO\'
             ');
             $encerrar->execute([
@@ -190,7 +202,10 @@ class Batalha
             ]);
 
             $timeCurado = false;
-            if (!$venceu && self::CURAR_TIME_AO_PERDER) {
+            $perdeuTudo = self::REINICIAR_PERFIL_AO_PERDER
+                && !$venceu
+                && count(array_filter($sim['jogador_final'], static fn (array $l): bool => $l['hp'] > 0)) === 0;
+            if (!$venceu && !$perdeuTudo && self::CURAR_TIME_AO_PERDER) {
                 $this->curarTime($idPerfil);
                 $timeCurado = true;
             }
@@ -213,6 +228,18 @@ class Batalha
                 }
             }
 
+            // Resumo legivel do combate; os turnos ja ficam em log_batalha.
+            $historico = new Historico($this->pdo);
+            $nomeAdversario = (string) $encontro['adversario']['nome'];
+            $historico->registrar($idPerfil, $venceu ? 'BATALHA_VENCIDA' : 'BATALHA_PERDIDA',
+                ($venceu ? 'Vitoria' : 'Derrota') . ' contra ' . $nomeAdversario .
+                ' (batalha #' . $idBatalha . ').');
+            if ($venceu && $ctx['tipo_no'] === 'CHEFE') {
+                $historico->registrar($idPerfil, 'CHEFE_DERROTADO',
+                    'Chefe ' . $nomeAdversario . ' derrotado.' .
+                    ($areaConcluida ? ' Area concluida, proxima area liberada.' : ''));
+            }
+
             $saldo = $this->pdo->prepare('SELECT dinheiro FROM perfil WHERE id = :id');
             $saldo->execute(['id' => $idPerfil]);
             $dinheiroTotal = (int) $saldo->fetchColumn();
@@ -221,6 +248,11 @@ class Batalha
 
             // Depois da luta o encontro some: vitoria libera o mapa, derrota sorteia outro.
             $this->descartarEncontro($idPerfil, $ctx['id_no']);
+
+            if ($perdeuTudo) {
+                $this->reiniciarPerfilPorDerrota($idPerfil, $idUsuario);
+                $dinheiroTotal = 0;
+            }
 
             return [
                 'sucesso' => true,
@@ -234,6 +266,8 @@ class Batalha
                 'area_concluida' => $areaConcluida,
                 'pedras' => $pedras,
                 'time_curado' => $timeCurado,
+                'perfil_reiniciado' => $perdeuTudo,
+                'redirecionar' => $perdeuTudo ? self::PAGINA_SELECAO : null,
             ];
         } catch (\Throwable $erro) {
             if ($this->pdo->inTransaction()) {
@@ -275,9 +309,25 @@ class Batalha
         $eventos[] = $this->eventoEntrada('inimigo', $iI, $inimigo[$iI], $turno, $nomeAdversario);
 
         $rodadas = 0;
+        $parAnterior = null;
+        $rodadasImpasse = 0;
         while ($iJ < $totalJ && $iI < $totalI && $rodadas < self::MAX_RODADAS) {
             $rodadas++;
             $turno++;
+
+            $par = $iJ . ':' . $iI;
+            $ambosImunes = $this->multiplicador($jogador[$iJ], $inimigo[$iI]) <= 0.0
+                && $this->multiplicador($inimigo[$iI], $jogador[$iJ]) <= 0.0;
+            $rodadasImpasse = $ambosImunes
+                ? ($par === $parAnterior ? $rodadasImpasse + 1 : 1) : 0;
+            $parAnterior = $ambosImunes ? $par : null;
+            $investidaEmergencia = $rodadasImpasse >= 3;
+            if ($rodadasImpasse === 3) {
+                $eventos[] = [
+                    'tipo' => 'sistema', 'turno' => $turno,
+                    'msg' => 'Os golpes sao imunes! A Investida de Emergencia foi liberada.'
+                ];
+            }
 
             $ordem = $this->jogadorAtacaPrimeiro($jogador[$iJ], $inimigo[$iI])
                 ? ['jogador', 'inimigo']
@@ -290,7 +340,7 @@ class Batalha
                 }
 
                 if ($lado === 'jogador') {
-                    $resultado = $this->calcularDano($jogador[$iJ], $inimigo[$iI], 1.0);
+                    $resultado = $this->calcularDano($jogador[$iJ], $inimigo[$iI], 1.0, $investidaEmergencia);
                     $inimigo[$iI]['hp'] = max(0, $inimigo[$iI]['hp'] - $resultado['dano']);
                     $eventos[] = $this->eventoAtaque(
                         'jogador', $iJ, $iI, $jogador[$iJ], $inimigo[$iI], $resultado, $turno
@@ -306,7 +356,7 @@ class Batalha
                         break;
                     }
                 } else {
-                    $resultado = $this->calcularDano($inimigo[$iI], $jogador[$iJ], $fatorInimigo);
+                    $resultado = $this->calcularDano($inimigo[$iI], $jogador[$iJ], $fatorInimigo, $investidaEmergencia);
                     $jogador[$iJ]['hp'] = max(0, $jogador[$iJ]['hp'] - $resultado['dano']);
                     $eventos[] = $this->eventoAtaque(
                         'inimigo', $iI, $iJ, $inimigo[$iI], $jogador[$iJ], $resultado, $turno
@@ -342,6 +392,439 @@ class Batalha
         ];
     }
 
+    // ------------------------------------------------------------------
+    // BATALHA POR RODADAS: pausa entre rodadas para usar itens DE VERDADE.
+    // Os dados ativos ficam na sessao PHP e todos os itens/HP/logs ficam no DB.
+    // A versao antiga lutar() e mantida para compatibilidade, mas a tela
+    // utiliza somente iniciarTurnos() e executarTurno().
+    // ------------------------------------------------------------------
+
+    public function iniciarTurnos(int $idPerfil, int $idUsuario): array
+    {
+        $ativo = $_SESSION['peakmon_batalha_interativa'][$idPerfil] ?? null;
+        $ctx = $this->carregarContexto($idPerfil, $idUsuario, false);
+        $this->validarNoDeBatalha($ctx);
+
+        if (is_array($ativo)) {
+            if ($ativo['id_no'] !== $ctx['id_no'] || $ativo['id_area'] !== $ctx['id_area']) {
+                throw new DomainException('Existe uma batalha interrompida em outra area. Selecione o perfil novamente.');
+            }
+            $dados = $this->respostaDeTurno($ativo, [
+                $this->eventoEntrada('jogador', $ativo['iJ'], $ativo['jogador'][$ativo['iJ']], $ativo['turno'], $ativo['nome_adversario']),
+                $this->eventoEntrada('inimigo', $ativo['iI'], $ativo['inimigo'][$ativo['iI']], $ativo['turno'], $ativo['nome_adversario'])
+            ], false);
+            $dados['retomada'] = true;
+            return $dados;
+        }
+
+        $this->pdo->beginTransaction();
+        try {
+            $ctx = $this->carregarContexto($idPerfil, $idUsuario, true);
+            $this->validarNoDeBatalha($ctx);
+            $equipe = $this->carregarEquipe($idPerfil);
+            $jogador = array_values($equipe);
+            $iInicial = $this->proximoVivo($jogador, 0);
+            if ($iInicial >= count($jogador)) {
+                throw new DomainException('Todos estao desmaiados. Use Revive na Mochila ou visite o Centro Pokemon.');
+            }
+            $encontro = $this->obterEncontro($idPerfil, $ctx, $equipe);
+            [$idAdversario, $idTimeAdversario] = $this->garantirAdversario($encontro['adversario']);
+            $this->sincronizarTimeNpc($idTimeAdversario, $encontro['inimigos']);
+            $idTimeJogador = $this->buscarTimeDoJogador($idPerfil);
+
+            $inserir = $this->pdo->prepare("INSERT INTO batalha
+                (id_perfil, id_time_jogador, id_time_adversario, id_personagem_jogador,
+                 id_personagem_adversario, id_area, id_no, tipo_batalha, resultado)
+                VALUES (:perfil, :time_j, :time_a, :personagem_j, :personagem_a, :area, :no, :tipo, 'EM_ANDAMENTO')");
+            $inserir->execute([
+                'perfil' => $idPerfil,
+                'time_j' => $idTimeJogador,
+                'time_a' => $idTimeAdversario,
+                'personagem_j' => $ctx['id_personagem_perfil'],
+                'personagem_a' => $idAdversario,
+                'area' => $ctx['id_area'],
+                'no' => $ctx['id_no'],
+                'tipo' => $ctx['tipo_no'] === 'CHEFE' ? 'CHEFE' : 'NORMAL',
+            ]);
+            $idBatalha = (int) $this->pdo->lastInsertId();
+            $eventos = [
+                ['tipo' => 'inicio', 'turno' => 0, 'msg' => 'Batalha iniciada contra ' . $encontro['adversario']['nome'] . '.'],
+                $this->eventoEntrada('jogador', $iInicial, $jogador[$iInicial], 0, $encontro['adversario']['nome']),
+                $this->eventoEntrada('inimigo', 0, $encontro['inimigos'][0], 0, $encontro['adversario']['nome']),
+            ];
+            // Grava ate as batalhas interrompidas; nunca depende do navegador acabar a animacao.
+            $this->gravarLog($idBatalha, $eventos, $jogador, $encontro['inimigos']);
+            $this->pdo->commit();
+            $estado = [
+                'id_batalha' => $idBatalha, 'id_no' => $ctx['id_no'], 'id_area' => $ctx['id_area'],
+                'categoria' => $encontro['categoria'], 'tipo_no' => $ctx['tipo_no'],
+                'jogador' => $jogador, 'inimigo' => $encontro['inimigos'],
+                'iJ' => $iInicial, 'iI' => 0, 'turno' => 0, 'rodadas' => 0,
+                'par_impasse' => null, 'rodadas_impasse' => 0,
+                'fator' => $encontro['fator'], 'nome_adversario' => $encontro['adversario']['nome'],
+                'adversario' => $encontro['adversario'],
+            ];
+            $_SESSION['peakmon_batalha_interativa'][$idPerfil] = $estado;
+            return $this->respostaDeTurno($estado, $eventos, false);
+        } catch (\Throwable $erro) {
+            if ($this->pdo->inTransaction()) $this->pdo->rollBack();
+            throw $erro;
+        }
+    }
+
+    /** Um turno completo: ataques normais ou uso de item no lugar do ataque do jogador. */
+    public function executarTurno(int $idPerfil, int $idUsuario, ?int $idItem = null, ?int $idAlvo = null): array
+    {
+        $estado = $_SESSION['peakmon_batalha_interativa'][$idPerfil] ?? null;
+        if (!is_array($estado)) {
+            throw new DomainException('A batalha ainda nao comecou. Clique em Lutar.');
+        }
+        $this->pdo->beginTransaction();
+        try {
+            $ctx = $this->carregarContexto($idPerfil, $idUsuario, true);
+            $this->validarNoDeBatalha($ctx);
+            if ($ctx['id_no'] !== $estado['id_no'] || $ctx['id_area'] !== $estado['id_area']) {
+                throw new DomainException('O ponto atual mudou. Atualize a batalha.');
+            }
+            $validarBatalha = $this->pdo->prepare("SELECT id FROM batalha
+                WHERE id = :id AND id_perfil = :perfil AND resultado = 'EM_ANDAMENTO' FOR UPDATE");
+            $validarBatalha->execute(['id' => $estado['id_batalha'], 'perfil' => $idPerfil]);
+            if (!$validarBatalha->fetchColumn()) {
+                throw new DomainException('Esta batalha nao esta mais em andamento.');
+            }
+
+            $estado['turno']++;
+            $estado['rodadas']++;
+            $eventos = [];
+
+            if ($idItem !== null) {
+                if ($idAlvo === null) throw new DomainException('Selecione o Pokemon que recebera o item.');
+                $eventos[] = $this->usarItemEmCombate($estado, $idPerfil, $idItem, $idAlvo);
+                // Usar um item custa a acao do jogador; o inimigo ainda pode atacar.
+                $ordem = ['inimigo'];
+            } else {
+                $ordem = $this->jogadorAtacaPrimeiro(
+                    $estado['jogador'][$estado['iJ']], $estado['inimigo'][$estado['iI']]
+                ) ? ['jogador', 'inimigo'] : ['inimigo', 'jogador'];
+            }
+
+            // Se OS DOIS golpes sao imunes, tres rodadas de impasse liberam
+            // uma Investida de Emergencia neutra. Evita chegar a 400 rodadas
+            // e perder uma batalha impossivel por falta de dano.
+            $parAtual = $estado['iJ'] . ':' . $estado['iI'];
+            $ambosImunes = $this->multiplicador(
+                $estado['jogador'][$estado['iJ']], $estado['inimigo'][$estado['iI']]
+            ) <= 0.0 && $this->multiplicador(
+                $estado['inimigo'][$estado['iI']], $estado['jogador'][$estado['iJ']]
+            ) <= 0.0;
+            if ($idItem === null) {
+                $estado['rodadas_impasse'] = $ambosImunes
+                    ? (($estado['par_impasse'] ?? null) === $parAtual
+                        ? (int) ($estado['rodadas_impasse'] ?? 0) + 1 : 1)
+                    : 0;
+                $estado['par_impasse'] = $ambosImunes ? $parAtual : null;
+            }
+            $investidaEmergencia = $ambosImunes && ($estado['par_impasse'] ?? null) === $parAtual
+                && ($estado['rodadas_impasse'] ?? 0) >= 3;
+            if ($investidaEmergencia && $estado['rodadas_impasse'] === 3 && $idItem === null) {
+                $eventos[] = [
+                    'tipo' => 'sistema', 'turno' => $estado['turno'],
+                    'msg' => 'Os golpes dos dois Pokemon sao imunes! A Investida de Emergencia foi liberada.'
+                ];
+            }
+
+            foreach ($ordem as $lado) {
+                if ($estado['iJ'] >= count($estado['jogador']) || $estado['iI'] >= count($estado['inimigo'])) break;
+                $atacante = $lado === 'jogador' ? 'jogador' : 'inimigo';
+                $alvo = $lado === 'jogador' ? 'inimigo' : 'jogador';
+                $iAtacante = $lado === 'jogador' ? $estado['iJ'] : $estado['iI'];
+                $iAlvo = $lado === 'jogador' ? $estado['iI'] : $estado['iJ'];
+                $fator = $lado === 'jogador' ? 1.0 : (float) $estado['fator'];
+                $statusAtacante = $estado[$atacante][$iAtacante]['status'] ?? null;
+                $chancePerderAcao = match ($statusAtacante) {
+                    'SONO' => 70, 'CONGELAMENTO' => 60, 'PARALISIA' => 25,
+                    default => 0,
+                };
+                if ($chancePerderAcao > 0 && random_int(1, 100) <= $chancePerderAcao) {
+                    $eventos[] = [
+                        'tipo' => 'status', 'turno' => $estado['turno'],
+                        'lado' => $atacante, 'i' => $iAtacante, 'status' => $statusAtacante,
+                        'msg' => $estado[$atacante][$iAtacante]['nome'] . ' perdeu a acao por ' . $statusAtacante . '!',
+                    ];
+                    continue;
+                }
+                $dano = $this->calcularDano(
+                    $estado[$atacante][$iAtacante], $estado[$alvo][$iAlvo],
+                    $fator, $investidaEmergencia
+                );
+                $estado[$alvo][$iAlvo]['hp'] = max(0, $estado[$alvo][$iAlvo]['hp'] - $dano['dano']);
+                $eventos[] = $this->eventoAtaque($lado, $iAtacante, $iAlvo,
+                    $estado[$atacante][$iAtacante], $estado[$alvo][$iAlvo], $dano, $estado['turno']);
+                $tipoStatus = [
+                    'VENENO' => 'VENENO', 'FOGO' => 'QUEIMADURA',
+                    'GELO' => 'CONGELAMENTO', 'ELETRICO' => 'PARALISIA', 'PSIQUICO' => 'SONO'
+                ];
+                $tipoGolpe = $estado[$atacante][$iAtacante]['tipo'];
+                if (!$investidaEmergencia && $dano['dano'] > 0 && $estado[$alvo][$iAlvo]['hp'] > 0
+                    && $estado[$alvo][$iAlvo]['status'] === null
+                    && isset($tipoStatus[$tipoGolpe]) && random_int(1, 100) <= 15) {
+                    $estado[$alvo][$iAlvo]['status'] = $tipoStatus[$tipoGolpe];
+                    $eventos[] = [
+                        'tipo' => 'status', 'turno' => $estado['turno'], 'lado' => $alvo,
+                        'i' => $iAlvo, 'status' => $tipoStatus[$tipoGolpe],
+                        'msg' => $estado[$alvo][$iAlvo]['nome'] . ' sofreu ' . $tipoStatus[$tipoGolpe] . '!'
+                    ];
+                }
+
+                if ($estado[$alvo][$iAlvo]['hp'] <= 0) {
+                    $estado[$alvo][$iAlvo]['desmaiado'] = true;
+                    $eventos[] = $this->eventoDesmaio($alvo, $iAlvo, $estado[$alvo][$iAlvo], $estado['turno']);
+                    if ($alvo === 'jogador') {
+                        $estado['iJ'] = $this->proximoVivo($estado['jogador'], $estado['iJ'] + 1);
+                        if ($estado['iJ'] < count($estado['jogador'])) {
+                            $eventos[] = $this->eventoEntrada('jogador', $estado['iJ'], $estado['jogador'][$estado['iJ']], $estado['turno'], $estado['nome_adversario']);
+                        }
+                    } else {
+                        $estado['iI'] = $this->proximoVivo($estado['inimigo'], $estado['iI'] + 1);
+                        if ($estado['iI'] < count($estado['inimigo'])) {
+                            $eventos[] = $this->eventoEntrada('inimigo', $estado['iI'], $estado['inimigo'][$estado['iI']], $estado['turno'], $estado['nome_adversario']);
+                        }
+                    }
+                    // O substituto so entra: a rodada termina.
+                    break;
+                }
+            }
+
+            // Dano residual de veneno/queimadura ao fim da rodada.
+            foreach (['jogador' => 'iJ', 'inimigo' => 'iI'] as $lado => $indiceAtivo) {
+                $i = $estado[$indiceAtivo];
+                if ($i >= count($estado[$lado]) || $estado[$lado][$i]['hp'] <= 0) continue;
+                $status = $estado[$lado][$i]['status'];
+                if (!in_array($status, ['VENENO', 'QUEIMADURA'], true)) continue;
+                $danoResidual = max(1, (int) ceil($estado[$lado][$i]['hp_max'] / 16));
+                $estado[$lado][$i]['hp'] = max(0, $estado[$lado][$i]['hp'] - $danoResidual);
+                $eventos[] = [
+                    'tipo' => 'efeito_status', 'turno' => $estado['turno'], 'lado' => $lado,
+                    'i' => $i, 'status' => $status, 'dano' => $danoResidual,
+                    'hp_alvo' => $estado[$lado][$i]['hp'],
+                    'msg' => $estado[$lado][$i]['nome'] . ' sofreu dano de ' . $status . '!',
+                ];
+                if ($estado[$lado][$i]['hp'] <= 0) {
+                    $estado[$lado][$i]['desmaiado'] = true;
+                    $eventos[] = $this->eventoDesmaio($lado, $i, $estado[$lado][$i], $estado['turno']);
+                    $estado[$indiceAtivo] = $this->proximoVivo($estado[$lado], $i + 1);
+                    if ($estado[$indiceAtivo] < count($estado[$lado])) {
+                        $novo = $estado[$indiceAtivo];
+                        $eventos[] = $this->eventoEntrada($lado, $novo, $estado[$lado][$novo], $estado['turno'], $estado['nome_adversario']);
+                    }
+                }
+            }
+
+            $this->gravarHpDoTime($idPerfil, $estado['jogador']);
+            $acabou = $estado['iI'] >= count($estado['inimigo']) ||
+                      $estado['iJ'] >= count($estado['jogador']) ||
+                      $estado['rodadas'] >= self::MAX_RODADAS;
+            $resultadoFinal = null;
+            $ouro = 0;
+            $pedras = 0;
+            $areaConcluida = false;
+            $timeCurado = false;
+            $perdeuTudo = false;
+
+            if ($acabou) {
+                $resultadoFinal = $estado['iI'] >= count($estado['inimigo']) ? 'VITORIA' : 'DERROTA';
+                // Derrota total = todo o time desmaiou (empate por limite de rodadas nao conta).
+                $perdeuTudo = self::REINICIAR_PERFIL_AO_PERDER
+                    && $resultadoFinal === 'DERROTA'
+                    && $estado['iJ'] >= count($estado['jogador']);
+                $eventos[] = [
+                    'tipo' => 'fim', 'turno' => $estado['turno'], 'resultado' => $resultadoFinal,
+                    'msg' => $resultadoFinal === 'VITORIA' ? 'Você venceu a batalha!' : 'Todos os seus Pokémon desmaiaram...',
+                ];
+            }
+            // Cada rodada e seu log sao commitados juntos; a session guarda apenas o estado.
+            $this->gravarLog($estado['id_batalha'], $eventos, $estado['jogador'], $estado['inimigo']);
+            if ($acabou) {
+                if ($resultadoFinal === 'VITORIA') {
+                    [$minimo, $maximo] = self::OURO[$estado['categoria']];
+                    $ouro = random_int($minimo, $maximo);
+                }
+                $encerrar = $this->pdo->prepare("UPDATE batalha SET resultado = :resultado, dinheiro_ganho = :ouro, data_fim = CURRENT_TIMESTAMP
+                    WHERE id = :id AND resultado = 'EM_ANDAMENTO'");
+                $encerrar->execute(['resultado' => $resultadoFinal, 'ouro' => $ouro, 'id' => $estado['id_batalha']]);
+                if ($encerrar->rowCount() !== 1) throw new DomainException('Nao foi possivel finalizar a batalha.');
+                if ($resultadoFinal !== 'VITORIA' && !$perdeuTudo && self::CURAR_TIME_AO_PERDER) {
+                    $this->curarTime($idPerfil);
+                    $timeCurado = true;
+                }
+                if ($resultadoFinal === 'VITORIA' && $estado['tipo_no'] === 'CHEFE') {
+                    $consulta = $this->pdo->prepare('SELECT aj.quantidade_recompensa FROM area_concluida ac
+                        INNER JOIN area_jogo aj ON aj.id = ac.id_area WHERE ac.id_batalha = :id LIMIT 1');
+                    $consulta->execute(['id' => $estado['id_batalha']]);
+                    $q = $consulta->fetchColumn();
+                    if ($q !== false) { $areaConcluida = true; $pedras = (int) $q; }
+                }
+            }
+            // Evento resumido, na mesma transacao da batalha.
+            if ($acabou) {
+                $historico = new Historico($this->pdo);
+                $nomeAdversario = (string) $estado['nome_adversario'];
+                $historico->registrar($idPerfil,
+                    $resultadoFinal === 'VITORIA' ? 'BATALHA_VENCIDA' : 'BATALHA_PERDIDA',
+                    ($resultadoFinal === 'VITORIA' ? 'Vitoria' : 'Derrota') .
+                    ' contra ' . $nomeAdversario . ' (batalha #' . $estado['id_batalha'] .
+                    ($resultadoFinal === 'VITORIA' ? '). +' . $ouro . ' Pokedollars.' : ').'));
+                if ($resultadoFinal === 'VITORIA' && $estado['tipo_no'] === 'CHEFE') {
+                    $historico->registrar($idPerfil, 'CHEFE_DERROTADO',
+                        'Chefe ' . $nomeAdversario . ' derrotado.' .
+                        ($areaConcluida ? ' Area concluida e nova area desbloqueada.' : ''));
+                }
+            }
+            $saldo = $this->pdo->prepare('SELECT dinheiro FROM perfil WHERE id = :perfil');
+            $saldo->execute(['perfil' => $idPerfil]);
+            $dinheiroTotal = (int) $saldo->fetchColumn();
+            $this->pdo->commit();
+
+            if ($acabou) {
+                unset($_SESSION['peakmon_batalha_interativa'][$idPerfil]);
+                $this->descartarEncontro($idPerfil, $estado['id_no']);
+                if ($perdeuTudo) {
+                    $this->reiniciarPerfilPorDerrota($idPerfil, $idUsuario);
+                }
+            } else {
+                $_SESSION['peakmon_batalha_interativa'][$idPerfil] = $estado;
+            }
+            $dados = $this->respostaDeTurno($estado, $eventos, $acabou);
+            if ($acabou) {
+                $dados += [
+                    'resultado' => $resultadoFinal,
+                    'dinheiro_ganho' => $ouro,
+                    'dinheiro_total' => $dinheiroTotal,
+                    'pedras' => $pedras,
+                    'area_concluida' => $areaConcluida,
+                    'time_curado' => $timeCurado,
+                    'perfil_reiniciado' => $perdeuTudo,
+                    'redirecionar' => $perdeuTudo ? self::PAGINA_SELECAO : null,
+                ];
+                if ($perdeuTudo) {
+                    $dados['dinheiro_total'] = 0;
+                }
+            }
+            return $dados;
+        } catch (\Throwable $erro) {
+            if ($this->pdo->inTransaction()) $this->pdo->rollBack();
+            throw $erro;
+        }
+    }
+
+    /** Mesmo efeito do botao "Reiniciar perfil" do mapa.php (apaga o progresso so deste perfil). */
+    private function reiniciarPerfilPorDerrota(int $idPerfil, int $idUsuario): void
+    {
+        // Precisa rodar FORA de qualquer transacao: reiniciarEscolhas abre a propria.
+        (new Perfil($this->pdo))->reiniciarEscolhas($idPerfil, $idUsuario);
+
+        unset($_SESSION['peakmon_batalha_interativa'][$idPerfil], $_SESSION['peakmon_sinal'][$idPerfil]);
+        foreach (array_keys($_SESSION['peakmon_encontro'] ?? []) as $chave) {
+            if (str_starts_with((string) $chave, $idPerfil . ':')) {
+                unset($_SESSION['peakmon_encontro'][$chave]);
+            }
+        }
+    }
+
+    private function proximoVivo(array $time, int $inicio): int
+    {
+        for ($i = $inicio; $i < count($time); $i++) {
+            if ($time[$i]['hp'] > 0) return $i;
+        }
+        // Revive usado antes num membro ja derrubado: reintroduz quando nao ha mais reservas.
+        for ($i = 0; $i < $inicio; $i++) {
+            if ($time[$i]['hp'] > 0) return $i;
+        }
+        return count($time);
+    }
+
+    private function respostaDeTurno(array $estado, array $eventos, bool $finalizada): array
+    {
+        return [
+            'sucesso' => true, 'eventos' => $eventos, 'finalizada' => $finalizada,
+            'jogador' => $estado['jogador'], 'inimigo' => $estado['inimigo'],
+            'iJ' => $estado['iJ'], 'iI' => $estado['iI'],
+        ];
+    }
+
+    /** Altera inventario e estado da equipe dentro da mesma transacao do turno. */
+    private function usarItemEmCombate(array &$estado, int $idPerfil, int $idItem, int $idCapturado): array
+    {
+        $indice = null;
+        foreach ($estado['jogador'] as $i => $lutador) {
+            if ($lutador['id_capturado'] === $idCapturado) { $indice = $i; break; }
+        }
+        if ($indice === null) throw new DomainException('Pokemon nao pertence ao time desta batalha.');
+        $consulta = $this->pdo->prepare("SELECT i.id, i.nome, i.tipo_efeito, i.valor_efeito, i.status_curado,
+                ii.quantidade, inv.id AS id_inventario
+            FROM inventario inv INNER JOIN inventario_item ii ON ii.id_inventario = inv.id
+            INNER JOIN item i ON i.id = ii.id_item
+            WHERE inv.id_perfil = :perfil AND ii.id_item = :item AND i.ativo = TRUE FOR UPDATE");
+        $consulta->execute(['perfil' => $idPerfil, 'item' => $idItem]);
+        $item = $consulta->fetch(PDO::FETCH_ASSOC);
+        if (!$item || (int) $item['quantidade'] <= 0) throw new ItemInvalidoException('Item indisponivel na Mochila.');
+        $pk = &$estado['jogador'][$indice];
+        $hp = (int) $pk['hp'];
+        $max = (int) $pk['hp_max'];
+        $status = $pk['status'];
+        $novoHp = $hp;
+        $novoStatus = $status;
+        $tipo = $item['tipo_efeito'];
+        switch ($tipo) {
+            case 'CURA_HP':
+                if ($hp <= 0 || $hp >= $max) throw new DomainException('A Potion exige HP abaixo do maximo e Pokemon consciente.');
+                $novoHp = min($max, $hp + (int) $item['valor_efeito']);
+                break;
+            case 'CURA_TOTAL':
+                if ($hp <= 0) throw new DomainException('Use Revive em Pokemon desmaiado.');
+                $novoHp = $max;
+                if ($item['status_curado'] === 'TODOS') $novoStatus = null;
+                if ($novoHp === $hp && $novoStatus === $status) throw new DomainException('Esse Pokemon ja esta recuperado.');
+                break;
+            case 'CURA_STATUS':
+                if ($hp <= 0) throw new DomainException('Reviva o Pokemon antes de curar seu status.');
+                if ($status === null || ($item['status_curado'] !== 'TODOS' && $item['status_curado'] !== $status)) {
+                    throw new DomainException('Esse item nao cura o status atual do Pokemon.');
+                }
+                $novoStatus = null;
+                break;
+            case 'REVIVER':
+                if ($hp > 0) throw new DomainException('Revive so funciona em Pokemon desmaiado.');
+                $novoHp = max(1, (int) ceil($max * (int) $item['valor_efeito'] / 100));
+                break;
+            default:
+                throw new ItemInvalidoException('Esse item nao pode ser usado durante a batalha.');
+        }
+        $pk['hp'] = $novoHp;
+        $pk['desmaiado'] = $novoHp <= 0;
+        $pk['status'] = $novoStatus;
+        $atualizar = $this->pdo->prepare('UPDATE pokemon_capturado
+            SET hp_atual = :hp, desmaiado = :desmaiado, status_condicao = :status
+            WHERE id = :pokemon AND id_perfil = :perfil');
+        $atualizar->execute([
+            'hp' => $novoHp, 'desmaiado' => $pk['desmaiado'] ? 1 : 0, 'status' => $novoStatus,
+            'pokemon' => $idCapturado, 'perfil' => $idPerfil,
+        ]);
+        if ((int) $item['quantidade'] === 1) {
+            $deletar = $this->pdo->prepare('DELETE FROM inventario_item WHERE id_inventario = :inv AND id_item = :item');
+            $deletar->execute(['inv' => (int) $item['id_inventario'], 'item' => $idItem]);
+        } else {
+            $reduzir = $this->pdo->prepare('UPDATE inventario_item SET quantidade = quantidade - 1
+                WHERE id_inventario = :inv AND id_item = :item AND quantidade > 1');
+            $reduzir->execute(['inv' => (int) $item['id_inventario'], 'item' => $idItem]);
+        }
+        return [
+            'tipo' => 'item', 'turno' => $estado['turno'], 'lado' => 'jogador',
+            'i' => $indice, 'hp_alvo' => $novoHp, 'status' => $novoStatus,
+            'msg' => 'Você usou ' . $item['nome'] . ' em ' . $pk['nome'] . '!'
+        ];
+    }
+
     private function jogadorAtacaPrimeiro(array $jogador, array $inimigo): bool
     {
         if ($jogador['prio'] !== $inimigo['prio']) {
@@ -359,16 +842,16 @@ class Batalha
      * variacao de 85-100% e critico (x1.5). Cada Pokemon so tem um tipo e o
      * golpe e sempre desse tipo, entao o bonus STAB ja esta embutido no poder.
      */
-    private function calcularDano(array $atacante, array $alvo, float $fator): array
+    private function calcularDano(array $atacante, array $alvo, float $fator, bool $neutro = false): array
     {
         $especial = $atacante['cat'] === 'ESPECIAL';
         $ataque = $especial ? $atacante['sp_atk'] : $atacante['atk'];
         $defesa = $especial ? $alvo['sp_def'] : $alvo['def'];
 
-        $efetividade = $this->multiplicador($atacante, $alvo);
+        $efetividade = $neutro ? 1.0 : $this->multiplicador($atacante, $alvo);
 
         if ($efetividade <= 0.0) {
-            return ['dano' => 0, 'efetividade' => 0.0, 'critico' => false];
+            return ['dano' => 0, 'efetividade' => 0.0, 'critico' => false, 'neutro' => false];
         }
 
         $critico = random_int(1, 100) <= self::CHANCE_CRITICO;
@@ -381,6 +864,7 @@ class Batalha
             'dano' => max(1, $dano),
             'efetividade' => $efetividade,
             'critico' => $critico,
+            'neutro' => $neutro,
         ];
     }
 
@@ -443,7 +927,8 @@ class Batalha
         array $resultado,
         int $turno
     ): array {
-        $msg = $atacante['nome'] . ' usou ' . $atacante['golpe'] . '!';
+        $golpe = !empty($resultado['neutro']) ? 'Investida de Emergência' : $atacante['golpe'];
+        $msg = $atacante['nome'] . ' usou ' . $golpe . '!';
 
         if ($resultado['efetividade'] <= 0.0) {
             $msg .= ' Não afeta ' . $alvo['nome'] . '...';
@@ -465,7 +950,7 @@ class Batalha
             'lado' => $lado,
             'i' => $indiceAtacante,
             'alvo' => $indiceAlvo,
-            'golpe' => $atacante['golpe'],
+            'golpe' => $golpe,
             'dano' => $resultado['dano'],
             'efetividade' => $resultado['efetividade'],
             'critico' => $resultado['critico'],
@@ -502,7 +987,9 @@ class Batalha
                 (:batalha, :turno, :tipo, :msg, :atacante, :alvo, :dano)
         ');
 
-        $nomes = ['entra' => 'ENTRADA', 'ataque' => 'ATAQUE', 'desmaia' => 'DESMAIO', 'fim' => 'FIM'];
+        $nomes = ['entra' => 'ENTRADA', 'ataque' => 'ATAQUE', 'desmaia' => 'DESMAIO', 'fim' => 'FIM',
+                  'item' => 'ITEM', 'status' => 'STATUS', 'efeito_status' => 'STATUS_DANO',
+                  'inicio' => 'INICIO_BATALHA', 'sistema' => 'IMPASSE'];
 
         foreach ($eventos as $evento) {
             $atacante = null;
@@ -523,7 +1010,9 @@ class Batalha
             $inserir->execute([
                 'batalha' => $idBatalha,
                 'turno' => (int) $evento['turno'],
-                'tipo' => $nomes[$evento['tipo']] ?? 'EVENTO',
+                'tipo' => $evento['tipo'] === 'desmaia'
+                    ? (($evento['lado'] ?? '') === 'inimigo' ? 'POKEMON_DERROTADO' : 'ALIADO_DESMAIO')
+                    : ($nomes[$evento['tipo']] ?? 'EVENTO'),
                 'msg' => $evento['msg'],
                 'atacante' => $atacante,
                 'alvo' => $alvo,
@@ -537,7 +1026,7 @@ class Batalha
     {
         $atualizar = $this->pdo->prepare('
             UPDATE pokemon_capturado
-            SET hp_atual = :hp, desmaiado = :desmaiado
+            SET hp_atual = :hp, desmaiado = :desmaiado, status_condicao = :status
             WHERE id = :id AND id_perfil = :perfil
         ');
 
@@ -546,6 +1035,7 @@ class Batalha
             $atualizar->execute([
                 'hp' => $hp,
                 'desmaiado' => $hp <= 0 ? 1 : 0,
+                'status' => $lutador['status'] ?? null,
                 'id' => $lutador['id_capturado'],
                 'perfil' => $idPerfil,
             ]);
@@ -659,10 +1149,13 @@ class Batalha
                 n.id_personagem AS id_personagem_no
             FROM progresso_area pa
             INNER JOIN perfil p ON p.id = pa.id_perfil
+            INNER JOIN area_jogo a ON a.id = pa.id_area
             LEFT JOIN area_no n
                 ON n.id = pa.id_no_atual AND n.id_area = pa.id_area
-            WHERE pa.id_perfil = :perfil AND p.id_usuario = :usuario
-            ORDER BY pa.id_area ASC
+            WHERE pa.id_perfil = :perfil
+              AND p.id_usuario = :usuario
+              AND pa.estado IN (\'DISPONIVEL\', \'EM_ANDAMENTO\')
+            ORDER BY a.ordem DESC
             LIMIT 1' . ($bloquear ? ' FOR UPDATE' : '');
 
         $consulta = $this->pdo->prepare($sql);
@@ -670,7 +1163,7 @@ class Batalha
         $linha = $consulta->fetch();
 
         if ($linha === false) {
-            throw new DomainException('Progresso do perfil nao encontrado.');
+            throw new DomainException('Nao ha batalha pendente neste mapa.', self::SEM_BATALHA);
         }
 
         $idNo = $linha['id_no_atual'] === null ? null : (int) $linha['id_no_atual'];
@@ -724,7 +1217,7 @@ class Batalha
     private function carregarEquipe(int $idPerfil): array
     {
         $consulta = $this->pdo->prepare('
-            SELECT tp.posicao, pc.id AS id_capturado, pc.hp_atual, pc.desmaiado,' . self::COLUNAS_ESPECIE . '
+            SELECT tp.posicao, pc.id AS id_capturado, pc.hp_atual, pc.desmaiado, pc.status_condicao,' . self::COLUNAS_ESPECIE . '
             FROM times tm
             INNER JOIN time_pokemon tp ON tp.id_time = tm.id
             INNER JOIN pokemon_capturado pc ON pc.id = tp.id_pokemon_capturado
@@ -767,6 +1260,7 @@ class Batalha
             'cat' => (string) $linha['categoria_ataque'],
             'poder' => (int) $linha['poder_ataque'],
             'desmaiado' => isset($linha['desmaiado']) ? (bool) $linha['desmaiado'] : false,
+            'status' => $linha['status_condicao'] ?? null,
         ];
     }
 
