@@ -327,7 +327,10 @@ $imgArnaldo = 'images/pokemon/Armaldo.png';
         }
 
         function urlImagem(caminho) {
-            return "url('" + String(caminho).replace(/'/g, "\\'") + "')";
+            // O batalha.css (em assets/css/) e quem le o --img: o caminho precisa ser absoluto para nao
+            // ser procurado a partir de assets/css/.
+            const absoluto = new URL(String(caminho), document.baseURI).href;
+            return "url('" + absoluto.replace(/'/g, "\\'") + "')";
         }
 
         // Cartao de Pokemon (usado no time e no adversario antes da luta).

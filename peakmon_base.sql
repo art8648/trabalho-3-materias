@@ -8,6 +8,7 @@ CREATE TABLE tipo_pokemon (
     id TINYINT UNSIGNED PRIMARY KEY,
     nome VARCHAR(20) NOT NULL UNIQUE
 );
+
 -- A tabela guarda somente as combinacoes nao neutras.
 -- Se nao existir registro para um par de tipos, o multiplicador e 1.0.
 CREATE TABLE tipo_efetividade (
@@ -199,7 +200,7 @@ CREATE TABLE area_no (
     id INT AUTO_INCREMENT PRIMARY KEY,
     id_area INT NOT NULL,
     codigo VARCHAR(40) NOT NULL,
-    tipo_no ENUM('INICIO','BATALHA','CAPTURA','ITEM','LOJA','CURA','EVENTO','CHEFE','FIM') NOT NULL,
+    tipo_no ENUM('INICIO','BATALHA','CAPTURA','ITEM','CURA','EVENTO','CHEFE','FIM') NOT NULL,
     titulo VARCHAR(80) NOT NULL,
     descricao VARCHAR(255) NULL,
     pos_x INT NOT NULL DEFAULT 0,
@@ -1325,10 +1326,10 @@ INSERT INTO area_no (id_area, codigo, tipo_no, titulo, descricao, pos_x, pos_y, 
 (@id_area, 'GRAMA_6',         'BATALHA', 'Mato alto',         'Um Pokemon selvagem apareceu!',            38, 64, NULL),
 (@id_area, 'CAPTURA_4',       'CAPTURA', 'Pokebola',          'Chance de capturar um Pokemon.',           62, 64, NULL),
 (@id_area, 'CAPTURA_5',       'CAPTURA', 'Pokebola',          'Chance de capturar um Pokemon.',           87, 64, NULL),
--- linha 6 (no lugar do "?" e do CD da imagem: evento e loja)
+-- linha 6 (evento, item escondido e uma segunda chance de captura)
 (@id_area, 'EVENTO_1',        'EVENTO',  'Sinal estranho',    'Algo diferente acontece por aqui...',      18, 76, NULL),
 (@id_area, 'ITEM_2',          'ITEM',    'Item escondido',    'Voce achou algo no chao.',                 50, 76, NULL),
-(@id_area, 'LOJA_1',          'LOJA',    'Loja da rota',      'Compre itens com seus Pokedollars.',       82, 76, NULL),
+(@id_area, 'CAPTURA_6',       'CAPTURA', 'Pokebola',          'Chance de capturar um Pokemon.',           82, 76, NULL),
 -- linha 7: as duas casas anteriores ao chefe (uma delas e o Centro Pokemon)
 (@id_area, 'ITEM_3',          'ITEM',    'Item escondido',    'Voce achou algo no chao.',                 27, 87, NULL),
 (@id_area, 'CENTRO_POKEMON',  'CURA',    'Centro Pokemon',    'Cure seu time antes de enfrentar o chefe.',73, 87, NULL),
@@ -1367,12 +1368,12 @@ FROM (
     UNION ALL SELECT 'GRAMA_6', 'EVENTO_1'
     UNION ALL SELECT 'GRAMA_6', 'ITEM_2'
     UNION ALL SELECT 'CAPTURA_4', 'ITEM_2'
-    UNION ALL SELECT 'CAPTURA_4', 'LOJA_1'
-    UNION ALL SELECT 'CAPTURA_5', 'LOJA_1'
+    UNION ALL SELECT 'CAPTURA_4', 'CAPTURA_6'
+    UNION ALL SELECT 'CAPTURA_5', 'CAPTURA_6'
     UNION ALL SELECT 'EVENTO_1', 'ITEM_3'
     UNION ALL SELECT 'ITEM_2', 'ITEM_3'
     UNION ALL SELECT 'ITEM_2', 'CENTRO_POKEMON'
-    UNION ALL SELECT 'LOJA_1', 'CENTRO_POKEMON'
+    UNION ALL SELECT 'CAPTURA_6', 'CENTRO_POKEMON'
     UNION ALL SELECT 'ITEM_3', 'CHEFE_1'
     UNION ALL SELECT 'CENTRO_POKEMON', 'CHEFE_1'
 ) AS c

@@ -1,0 +1,101 @@
+/* ===== Fundo da tela do mapa (a parte de tras da pagina, nao o quadro do mapa) ===== */
+
+/* Camada fixa atras de todo o conteudo; fica transparente no fundo "Padrao". */
+.fundo-mapa {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    opacity: 0;
+    transition: opacity .35s ease;
+    pointer-events: none;
+}
+.fundo-mapa.com-imagem { opacity: 1; }
+/* Escurece levemente a imagem para os paineis e textos continuarem legiveis. */
+.fundo-mapa::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: rgba(8, 14, 24, .22);
+}
+
+/* Botao no canto inferior direito + painel de escolha. */
+.fundo-seletor {
+    position: fixed;
+    right: 18px;
+    bottom: 18px;
+    z-index: 90;
+    font-family: monospace;
+}
+.fundo-botao {
+    font: inherit;
+    font-weight: bold;
+    color: #20252a;
+    cursor: pointer;
+    background: linear-gradient(180deg, #f6f1e3 0%, #e7deca 100%);
+    border: 4px solid #24313a;
+    box-shadow: 0 0 0 2px #d9c89c inset, 5px 5px 0 #42515a;
+    padding: 9px 14px;
+    transition: transform .18s ease, box-shadow .18s ease, background .18s ease;
+}
+.fundo-botao:hover,
+.fundo-botao[aria-expanded="true"] {
+    background: #f3ebd3;
+    transform: translateY(-1px);
+    box-shadow: 0 0 0 2px #d9c89c inset, 6px 6px 0 #3d4b53;
+}
+.fundo-botao:focus-visible,
+.fundo-opcao:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+
+.fundo-painel {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 12px);
+    width: min(330px, calc(100vw - 36px));
+    display: grid;
+    gap: 10px;
+    padding: 12px;
+    background: linear-gradient(180deg, #f6f1e3 0%, #e7deca 100%);
+    border: 4px solid #24313a;
+    box-shadow: 0 0 0 2px #d9c89c inset, 5px 5px 0 #42515a;
+    color: #20252a;
+}
+.fundo-painel[hidden] { display: none; }
+.fundo-painel > strong { font-size: 12px; letter-spacing: .08em; color: #385b43; }
+
+.fundo-opcoes {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+}
+.fundo-opcao {
+    font: inherit;
+    display: grid;
+    gap: 4px;
+    padding: 4px;
+    cursor: pointer;
+    text-align: center;
+    background: #fbf8ef;
+    border: 3px solid #24313a;
+    transition: transform .15s ease;
+}
+.fundo-opcao:hover { transform: translateY(-1px); }
+.fundo-opcao.ativo { border-color: #d4a017; box-shadow: 0 0 0 2px #f3d86c inset; }
+.fundo-opcao em { font-style: normal; font-size: 11px; font-weight: bold; }
+.fundo-mini {
+    display: block;
+    height: 54px;
+    background-size: cover;
+    background-position: center;
+    border: 2px solid #24313a;
+}
+/* Miniatura do fundo "Padrao": o mesmo ceu/grama do mapa original. */
+.fundo-mini-padrao {
+    background-image: linear-gradient(to bottom, #77c5eb 0%, #89d5f0 22%, #b9e9f5 42%, #f3fbff 48%, #a9d27d 49%, #8fbd68 72%, #7aa35a 100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .fundo-mapa, .fundo-botao, .fundo-opcao { transition: none; }
+}

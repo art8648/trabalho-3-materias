@@ -230,6 +230,18 @@ $escapar = static function ($valor): string {
     return htmlspecialchars((string) $valor, ENT_QUOTES, 'UTF-8');
 };
 
+// Imagens usadas em "--img" (variavel CSS) sao lidas pelo mapa.css, que fica em assets/css/. Um caminho relativo
+// como "images/pokemon/X.png" seria procurado a partir dessa pasta e quebraria; por isso o caminho sai a partir
+// da raiz do projeto (pasta do index.php), funcionando em qualquer subpasta do servidor.
+$urlImagemCss = static function ($caminho): string {
+    $caminho = (string) $caminho;
+    if ($caminho === '' || preg_match('#^(?:[a-z][a-z0-9+.-]*:|/)#i', $caminho) === 1) {
+        return $caminho;
+    }
+    $base = rtrim(str_replace('\\', '/', dirname((string) ($_SERVER['SCRIPT_NAME'] ?? '/index.php'))), '/');
+    return $base . '/' . ltrim($caminho, '/');
+};
+
 // Cor do brilho de cada card, conforme o tipo (R, G, B).
 $corPorTipo = static function (string $tipo): string {
     return match (strtoupper(trim($tipo))) {
@@ -266,8 +278,11 @@ $corPorTipo = static function (string $tipo): string {
 
     <link rel="stylesheet" href="assets/css/mapa.css">
     <link rel="stylesheet" href="assets/css/peakui.css">
+    <link rel="stylesheet" href="assets/css/mapa-fundo.css">
 </head>
 <body>
+<div class="fundo-mapa" aria-hidden="true"></div>
+<script src="assets/js/mapa-fundo.js"></script>
 
 <header class="topo">
     <div class="informacao">
@@ -313,7 +328,7 @@ $corPorTipo = static function (string $tipo): string {
                                     $hpPercentual = (int) max(0, min(100, round(($hpAtual / $hpMax) * 100)));
                                     $classeHp = $hpPercentual <= 25 ? ' hp-baixa' : ($hpPercentual <= 55 ? ' hp-media' : '');
                                 ?>
-                                <div class="time-foto" style="--cor: <?= $corPorTipo((string) $slot['tipo']) ?>; --img: url('<?= $escapar($slot['imagem']) ?>');"></div>
+                                <div class="time-foto" style="--cor: <?= $corPorTipo((string) $slot['tipo']) ?>; --img: url('<?= $escapar($urlImagemCss($slot['imagem'])) ?>');"></div>
                                 <div class="time-dados">
                                     <div class="time-topo">
                                         <strong><?= $escapar($slot['nome']) ?></strong>
@@ -424,7 +439,7 @@ $corPorTipo = static function (string $tipo): string {
                     <strong>LEGENDA</strong>
                     <div class="legenda-grade">
                         <span>🌿 Mato</span><span>🥋 Treinador</span><span><img src="images/mapa/captura.svg" alt=""> Captura</span><span><img src="images/mapa/item.svg" alt=""> Item</span>
-                        <span>🛒 Loja</span><span>🏥 Centro</span><span><img src="images/mapa/evento.svg" alt=""> Evento</span><span><img src="<?= $imagemDoChefe($dados['area']['chefe_nome'] ?? null) ?>" alt="" style="border-radius:50%;object-fit:cover"> Chefe</span>
+                        <span>🏥 Centro</span><span><img src="images/mapa/evento.svg" alt=""> Evento</span><span><img src="<?= $imagemDoChefe($dados['area']['chefe_nome'] ?? null) ?>" alt="" style="border-radius:50%;object-fit:cover"> Chefe</span>
                     </div>
                 </section>
             </div>
@@ -487,7 +502,7 @@ $corPorTipo = static function (string $tipo): string {
                     <button
                         type="button"
                         class="inicial-card"
-                        style="--cor: <?= $corPorTipo((string) $pokemon['tipo']) ?>; --img: url('<?= $escapar($pokemon['imagem']) ?>');"
+                        style="--cor: <?= $corPorTipo((string) $pokemon['tipo']) ?>; --img: url('<?= $escapar($urlImagemCss($pokemon['imagem'])) ?>');"
                         data-id-pokemon="<?= (int) $pokemon['id'] ?>"
                         data-nome="<?= $escapar($pokemon['nome']) ?>"
                         data-descricao="<?= $escapar($pokemon['descricao']) ?>"
@@ -618,6 +633,34 @@ $corPorTipo = static function (string $tipo): string {
         <path></path><g></g><image></image><text></text><circle></circle>
     </svg>
 </template>
+<?php
+// Fundos da tela (a parte de tras da pagina), alem do "Padrao". Imagens f1 a f4 em images/fundos/; so aparecem as que existem no disco.
+$fundosDaTela = [
+    'images/fundos/f1.png' => 'Oceano',
+    'images/fundos/f2.png' => 'Squirtle neon',
+    'images/fundos/f3.png' => 'Noite com Pikachu',
+    'images/fundos/f4.png' => 'Lagoa',
+];
+?>
+<div class="fundo-seletor" data-fundo-seletor>
+    <div class="fundo-painel" role="group" aria-label="Escolher o fundo da tela" hidden>
+        <strong>FUNDO DA TELA</strong>
+        <div class="fundo-opcoes">
+            <button type="button" class="fundo-opcao" data-fundo="padrao" aria-pressed="false">
+                <span class="fundo-mini fundo-mini-padrao"></span><em>Padrão</em>
+            </button>
+            <?php foreach ($fundosDaTela as $arquivo => $nomeFundo): ?>
+                <?php if (is_file(PEAKMON_ROOT . '/' . $arquivo)): ?>
+                    <button type="button" class="fundo-opcao" data-fundo="<?= $escapar($arquivo) ?>" aria-pressed="false">
+                        <span class="fundo-mini" style="background-image: url('<?= $escapar($arquivo) ?>');"></span><em><?= $escapar($nomeFundo) ?></em>
+                    </button>
+                <?php endif; ?>
+            <?php endforeach; ?>
+        </div>
+    </div>
+    <button type="button" class="fundo-botao" data-fundo-abrir aria-expanded="false" title="Trocar o fundo da tela">🖼 Fundo</button>
+</div>
+
 <script src="assets/js/peakui.js"></script>
 <script>
     // Modelos sao declarados no HTML para respeitar a restricao do professor.
