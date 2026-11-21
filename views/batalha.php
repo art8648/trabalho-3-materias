@@ -139,8 +139,11 @@ $imgArnaldo = 'images/pokemon/Armaldo.png';
 
     <link rel="stylesheet" href="assets/css/batalha.css">
     <link rel="stylesheet" href="assets/css/peakui.css">
+    <link rel="stylesheet" href="assets/css/mapa-fundo.css">
 </head>
 <body>
+<div class="fundo-mapa" aria-hidden="true"></div>
+<script src="assets/js/mapa-fundo.js"></script>
 
 <header class="topo">
     <div class="informacao">
@@ -1036,7 +1039,7 @@ $imgArnaldo = 'images/pokemon/Armaldo.png';
 
                         // 3) Investida e corte de espada: Arnaldo e partido ao meio.
                         if (!pularTudo) {
-                            fala('Rayquaza avança e oblitera Arnaldo como se não fosse nada!');
+                            fala('Rayquaza avançou como um espadachim... e cortou Arnaldo ao meio!');
                             await animar(2600, (t) => {
                                 ceu();
                                 // 0-0.30: investida | 0.30-0.45: risco | 0.45-1: metades se afastam
@@ -1298,6 +1301,8 @@ $imgArnaldo = 'images/pokemon/Armaldo.png';
         })();
     </script>
 <?php endif; ?>
+
+<?php require PEAKMON_ROOT . '/views/partials/seletor-fundo.php'; ?>
 
 </body>
 </html>
