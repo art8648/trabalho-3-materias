@@ -22,6 +22,6 @@ if (empty($_SESSION['usuario_id']) || (int) $_SESSION['usuario_id'] <= 0) {
         exit;
     }
 
-    header('Location: login.php');
+    header('Location: index.php?pagina=login');
     exit;
 }

@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 try{
-    $pdo = require __DIR__ . '/config/database.php';
+    $pdo = require dirname(__DIR__) . '/config/database.php';
     $consulta = $pdo->query('SELECT DATABASE() AS nome_banco');
     $resultado = $consulta->fetch();
 

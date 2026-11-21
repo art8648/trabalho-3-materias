@@ -8,7 +8,6 @@ CREATE TABLE tipo_pokemon (
     id TINYINT UNSIGNED PRIMARY KEY,
     nome VARCHAR(20) NOT NULL UNIQUE
 );
-
 -- A tabela guarda somente as combinacoes nao neutras.
 -- Se nao existir registro para um par de tipos, o multiplicador e 1.0.
 CREATE TABLE tipo_efetividade (

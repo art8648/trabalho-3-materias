@@ -1,14 +1,20 @@
 <?php
 declare(strict_types=1);
 
-require_once __DIR__ . '/app/iniciar_sessao.php';
-
-if (!empty($_SESSION['usuario_id']) && (int) $_SESSION['usuario_id'] > 0) {
-    header('Location: perfis.php');
+if (!defined('PEAKMON_ROOT')) {
+    http_response_code(404);
     exit;
 }
 
-// Aviso deixado por auth.php (senha errada, nome ja usado...). Aparece uma vez so.
+
+require_once PEAKMON_ROOT . '/app/iniciar_sessao.php';
+
+if (!empty($_SESSION['usuario_id']) && (int) $_SESSION['usuario_id'] > 0) {
+    header('Location: index.php?pagina=perfis');
+    exit;
+}
+
+// Aviso deixado por index.php?pagina=auth (senha errada, nome ja usado...). Aparece uma vez so.
 $aviso = $_SESSION['aviso_login'] ?? null;
 unset($_SESSION['aviso_login']);
 
@@ -24,4 +30,4 @@ if (is_array($aviso)) {
     }
 }
 
-require __DIR__ . '/menu inicial/login.html';
+require PEAKMON_ROOT . '/menu inicial/login.html';

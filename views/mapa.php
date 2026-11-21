@@ -1,6 +1,12 @@
 <?php
 declare(strict_types=1);
 
+if (!defined('PEAKMON_ROOT')) {
+    http_response_code(404);
+    exit;
+}
+
+
 use Peakmon\Models\Inicial;
 use Peakmon\Models\Mapa;
 use Peakmon\Models\Time;
@@ -8,8 +14,8 @@ use Peakmon\Models\Captura;
 use Peakmon\Models\Perfil;
 use Peakmon\Models\SinalEstranho;
 
-require_once __DIR__ . '/app/sessao.php';
-require_once __DIR__ . '/app/autoload.php';
+require_once PEAKMON_ROOT . '/app/sessao.php';
+require_once PEAKMON_ROOT . '/app/autoload.php';
 
 $ehPost = $_SERVER['REQUEST_METHOD'] === 'POST';
 
@@ -25,7 +31,7 @@ if (!isset($_SESSION['usuario_id'], $_SESSION['perfil_id'])) {
         exit;
     }
 
-    header('Location: perfis.php');
+    header('Location: index.php?pagina=perfis');
     exit;
 }
 
@@ -40,7 +46,7 @@ $roleta = [];
 $roletaItens = [];
 
 try {
-    $pdo = require __DIR__ . '/config/database.php';
+    $pdo = require PEAKMON_ROOT . '/config/database.php';
     $controller = new \Peakmon\Controllers\MapaController($pdo);
 
     if ($ehPost) {
@@ -50,7 +56,7 @@ try {
         exit;
     }
 
-    $pagina = $controller->carregarPagina($idPerfil, $idUsuario, __DIR__);
+    $pagina = $controller->carregarPagina($idPerfil, $idUsuario, PEAKMON_ROOT);
     $mostrarInicial = $pagina['mostrarInicial'];
     $personagemNome = $pagina['personagemNome'];
     $iniciais = $pagina['iniciais'];
@@ -124,7 +130,7 @@ $iconePorTipo = static function (string $tipo, string $codigo = ''): string {
 $imagemMapa = static function (string $nome): string {
     foreach ([$nome, str_replace(' ', '_', $nome)] as $base) {
         foreach (['png', 'webp', 'jpg', 'jpeg', 'gif'] as $extensao) {
-            if (is_file(__DIR__ . '/images/mapa/' . $base . '.' . $extensao)) {
+            if (is_file(PEAKMON_ROOT . '/images/mapa/' . $base . '.' . $extensao)) {
                 return 'images/mapa/' . rawurlencode($base) . '.' . $extensao;
             }
         }
@@ -177,7 +183,7 @@ $imagemPersonagem = static function (?string $nome): string {
     }
     foreach ([$nome, str_replace(' ', '_', $nome)] as $base) {
         foreach (['png', 'webp', 'jpg', 'jpeg', 'gif', 'svg'] as $extensao) {
-            if (is_file(__DIR__ . '/images/personagens/' . $base . '.' . $extensao)) {
+            if (is_file(PEAKMON_ROOT . '/images/personagens/' . $base . '.' . $extensao)) {
                 return 'images/personagens/' . rawurlencode($base) . '.' . $extensao;
             }
         }
@@ -226,11 +232,28 @@ $escapar = static function ($valor): string {
 
 // Cor do brilho de cada card, conforme o tipo (R, G, B).
 $corPorTipo = static function (string $tipo): string {
-    return match ($tipo) {
-        'GRAMA' => '130, 200, 120',
-        'FOGO' => '255, 100, 40',
-        'AGUA' => '100, 170, 255',
-        default => '255, 255, 255'
+    return match (strtoupper(trim($tipo))) {
+        'NORMAL' => '168, 167, 122',
+        'FOGO' => '238, 112, 63',
+        'AGUA' => '83, 141, 224',
+        'ELETRICO' => '240, 197, 50',
+        'GRAMA' => '104, 183, 91',
+        'GELO' => '105, 199, 207',
+        'LUTADOR' => '205, 89, 81',
+        'VENENO' => '172, 100, 183',
+        'TERRA' => '207, 169, 91',
+        'VOADOR' => '152, 159, 222',
+        'PSIQUICO' => '232, 99, 152',
+        'INSETO' => '163, 179, 65',
+        'PEDRA' => '183, 159, 87',
+        'FANTASMA' => '117, 96, 168',
+        'DRAGAO' => '128, 100, 216',
+        'SOMBRIO' => '129, 111, 101',
+        'ACO' => '155, 173, 190',
+        'FADA' => '229, 145, 194',
+        'ALIENX' => '78, 194, 171',
+        'TUDO' => '223, 168, 65',
+        default => '168, 167, 122'
     };
 };
 ?>
@@ -241,1390 +264,8 @@ $corPorTipo = static function (string $tipo): string {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Peakmon - Mapa</title>
 
-    <style>
-        * { box-sizing: border-box; }
-
-        body {
-            margin: 0;
-            min-height: 100vh;
-            overflow-x: hidden;
-            font-family: monospace;
-            color: #20252a;
-            background: linear-gradient(
-                to bottom,
-                #75c8f4 0%,
-                #8bd7f7 45%,
-                #e5f4f5 46%,
-                #9acb70 47%,
-                #7eaa6b 100%
-            );
-        }
-
-        .topo {
-            width: min(calc(100% - 40px), 1280px);
-            margin: 18px auto 12px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 12px;
-            flex-wrap: wrap;
-        }
-
-        .informacao, .botao-menu {
-            background: #eee9dc;
-            border: 3px solid #292e31;
-            box-shadow: 3px 3px #42484b;
-            padding: 10px 14px;
-        }
-
-        .informacao strong { color: #385b43; }
-        .botao-menu { color: #20252a; text-decoration: none; font-weight: bold; }
-        .botao-menu:hover { background: #d9efd5; }
-
-        .indice-area {
-            width: fit-content;
-            max-width: calc(100% - 24px);
-            margin: 13px auto 0;
-            padding: 6px 14px;
-            background: #132d4a;
-            border: 2px solid #081629;
-            box-shadow: 3px 3px 0 #6a90a2;
-            color: #b8ffda;
-            text-align: center;
-            font-size: 11px;
-            font-weight: 900;
-            letter-spacing: 1.4px;
-        }
-
-        h1 {
-            text-align: center;
-            margin: 12px 8px 18px;
-            font-size: clamp(18px, 3vw, 25px);
-            text-shadow: 1px 2px #fff;
-        }
-
-        .mapa {
-            position: relative;
-            width: min(94vw, 620px);
-            height: min(150vw, 900px);
-            min-height: 620px;
-            margin: 0 auto 35px;
-            overflow: hidden;
-            border: 4px solid #24292a;
-            box-shadow: 5px 5px #40494b;
-            background-color: #72cda8;
-            background-image:
-                radial-gradient(circle at 20% 25%, #9adcb6 0 1px, transparent 2px),
-                radial-gradient(circle at 72% 63%, #4dbd91 0 1px, transparent 2px),
-                radial-gradient(circle at 50% 40%, #a1e0b9 0 1px, transparent 2px);
-            background-size: 19px 21px, 23px 17px, 29px 25px;
-        }
-
-        .mapa::before, .mapa::after {
-            content: "";
-            position: absolute;
-            top: 0;
-            bottom: 0;
-            width: 18px;
-            z-index: 1;
-            background: repeating-linear-gradient(
-                135deg,
-                #3c8d4e 0 7px,
-                #65bd68 7px 14px,
-                #b0e77a 14px 20px
-            );
-        }
-        .mapa::before { left: 0; }
-        .mapa::after { right: 0; }
-
-        .caminhos {
-            position: absolute;
-            inset: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            z-index: 2;
-        }
-
-        .caminhos line {
-            stroke: #d6c9a1;
-            stroke-width: 0.8;
-            stroke-dasharray: 1.5 1.2;
-        }
-
-        .no {
-            position: absolute;
-            z-index: 3;
-            width: 46px;
-            height: 46px;
-            padding: 0;
-            transform: translate(-50%, -50%);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            border: 0;
-            background: transparent;
-            color: #20252a;
-            font: inherit;
-            font-size: 27px;
-            cursor: default;
-            filter: drop-shadow(1px 2px 0 rgba(0,0,0,.25));
-        }
-
-        .no-img {
-            width: 42px;
-            height: 42px;
-            object-fit: contain;
-            image-rendering: pixelated;
-            pointer-events: none;
-            user-select: none;
-        }
-        .legenda-img {
-            width: 20px;
-            height: 20px;
-            object-fit: contain;
-            image-rendering: pixelated;
-            vertical-align: middle;
-        }
-
-        button.no { cursor: pointer; }
-        button.no:hover { transform: translate(-50%, -50%) scale(1.2); }
-        button.no:focus-visible { outline: 3px solid white; border-radius: 50%; }
-
-        .no.atual {
-            width: 48px;
-            height: 48px;
-            border: 3px solid #252a2d;
-            border-radius: 50%;
-            background: #f3d86c;
-        }
-
-        .no.bloqueado {
-            opacity: .38;
-            filter: grayscale(1);
-        }
-
-        .no .dica {
-            position: absolute;
-            left: 50%;
-            bottom: calc(100% + 7px);
-            transform: translateX(-50%);
-            width: max-content;
-            max-width: 190px;
-            padding: 7px 9px;
-            border: 2px solid #252a2d;
-            background: #f2eddf;
-            color: #34332e;
-            box-shadow: 3px 3px #42484b;
-            font-size: 11px;
-            font-weight: bold;
-            opacity: 0;
-            visibility: hidden;
-            pointer-events: none;
-        }
-
-        .no .dica.dica-baixo {
-            bottom: auto;
-            top: calc(100% + 7px);
-        }
-
-        .no:hover .dica, .no:focus-visible .dica {
-            opacity: 1;
-            visibility: visible;
-        }
-
-        .painel-inferior {
-            width: min(94vw, 620px);
-            margin: -15px auto 30px;
-            padding: 12px 15px;
-            border: 3px solid #292e31;
-            background: #eee9dc;
-            box-shadow: 4px 4px #42484b;
-            line-height: 1.6;
-        }
-
-        .erro {
-            width: min(94vw, 620px);
-            margin: 20px auto;
-            padding: 14px;
-            background: #fff0e8;
-            border: 3px solid #a84d38;
-            color: #7d281b;
-            line-height: 1.5;
-        }
-
-        .sem-area {
-            width: min(94vw, 620px);
-            margin: 30px auto;
-            padding: 22px;
-            border: 3px solid #292e31;
-            background: #eee9dc;
-            box-shadow: 4px 4px #42484b;
-            text-align: center;
-            line-height: 1.6;
-        }
-
-        .legenda {
-            width: min(94vw, 620px);
-            margin: 0 auto 25px;
-            padding: 10px 14px;
-            background: #eee9dc;
-            border: 2px solid #34383a;
-            font-size: 12px;
-            line-height: 1.8;
-        }
-
-        @media (max-width: 520px) {
-            .topo { align-items: stretch; }
-            .informacao { flex: 1; }
-            .mapa { min-height: 620px; }
-        }
-
-        /* ===== PAINEL: TIME (ao lado do mapa) ===== */
-
-        /* ===== LAYOUT PRINCIPAL: TIME | MAPA | ACESSOS ===== */
-
-        .area-jogo {
-            width: min(calc(100% - 40px), 1280px);
-            margin: 0 auto 30px;
-            display: grid;
-            grid-template-columns: 252px minmax(0, 620px) 180px;
-            justify-content: center;
-            align-items: start;
-            gap: 18px;
-        }
-
-        .area-jogo .mapa {
-            width: 100%;
-            height: min(90vh, 900px);
-            min-height: 620px;
-            margin: 0;
-        }
-
-        .time {
-            width: 100%;
-            max-width: none;
-            padding: 12px;
-            background: #eee9dc;
-            border: 3px solid #292e31;
-            box-shadow: 4px 4px #42484b;
-        }
-
-        /* Espaço reservado para a futura mochila e loja.
-           Nesta etapa os botões são apenas visuais, sem funcionalidades. */
-        .acessos-laterais {
-            width: 100%;
-            padding: 12px;
-            background: #eee9dc;
-            border: 3px solid #292e31;
-            box-shadow: 4px 4px #42484b;
-        }
-
-        .acessos-titulo {
-            margin: 0 0 12px;
-            text-align: center;
-            font-size: 15px;
-            letter-spacing: 2px;
-            color: #817866;
-        }
-
-        .acesso-placeholder {
-            width: 100%;
-            min-height: 92px;
-            margin: 0 0 10px;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            gap: 7px;
-            border: 2px dashed #aaa28f;
-            background: #f8f4e8;
-            color: #77705f;
-            font: inherit;
-            font-weight: bold;
-            letter-spacing: 1px;
-            cursor: default;
-        }
-
-        .acesso-placeholder:last-child { margin-bottom: 0; }
-
-        .acesso-icone {
-            font-size: 30px;
-            line-height: 1;
-        }
-
-        .acesso-legenda {
-            margin: 10px 0 0;
-            color: #8a8372;
-            font-size: 10px;
-            line-height: 1.4;
-            text-align: center;
-        }
-
-        @media (max-width: 900px) {
-            .area-jogo {
-                width: min(calc(100% - 24px), 620px);
-                grid-template-columns: minmax(0, 1fr);
-                gap: 14px;
-            }
-
-            .area-jogo .mapa {
-                grid-row: 1;
-                height: min(110vw, 900px);
-                min-height: 620px;
-            }
-
-            .time { grid-row: 2; }
-            .acessos-laterais {
-                grid-row: 3;
-                display: grid;
-                grid-template-columns: repeat(2, minmax(0, 1fr));
-                gap: 10px;
-            }
-
-            .acessos-titulo,
-            .acesso-legenda { grid-column: 1 / -1; }
-
-            .acesso-placeholder { margin: 0; }
-        }
-
-        @media (max-width: 520px) {
-            .area-jogo .mapa {
-                min-height: 620px;
-                height: 150vw;
-            }
-        }
-
-        .time-titulo {
-            margin: 0 0 10px;
-            text-align: center;
-            font-size: 18px;
-            letter-spacing: 4px;
-        }
-
-        .time-lista {
-            list-style: none;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .time-slot {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .time-numero {
-            width: 18px;
-            flex: none;
-            text-align: center;
-            font-weight: bold;
-            color: #385b43;
-        }
-
-        .time-card {
-            flex: 1;
-            min-width: 0;
-            min-height: 54px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 5px 8px;
-            overflow: hidden;
-            background: #f8f4e8;
-            border: 2px solid #34383a;
-            cursor: pointer;
-        }
-
-        .time-card:hover,
-        .time-card:focus-visible {
-            background: #e1f0dc;
-            outline: none;
-        }
-
-        .time-slot.vazio .time-card {
-            justify-content: center;
-            opacity: .6;
-        }
-
-        .time-slot.selecionado .time-card {
-            background: #f3d86c;
-            border-color: #20252a;
-            box-shadow: 0 0 0 3px #fff;
-            opacity: 1;
-        }
-
-        .time-foto {
-            width: 38px;
-            height: 38px;
-            flex: none;
-            border: 2px solid #34383a;
-            border-radius: 50%;
-            background-color: rgba(var(--cor), .45);
-            background-image: var(--img);
-            background-size: contain;
-            background-position: center;
-            background-repeat: no-repeat;
-        }
-
-        .time-dados {
-            display: flex;
-            flex-direction: column;
-            flex: 1 1 0;
-            min-width: 0;
-            font-size: 12px;
-            line-height: 1.35;
-        }
-
-        .time-dados strong { font-size: 14px; white-space: nowrap; }
-        .time-dados em { color: #a84d38; font-style: normal; font-weight: bold; }
-        .time-vazio { font-size: 12px; }
-
-        .time-trocar {
-            width: 32px;
-            height: 32px;
-            flex: none;
-            padding: 0;
-            border: 2px solid #292e31;
-            background: #d9efd5;
-            color: #20252a;
-            font: inherit;
-            font-size: 16px;
-            cursor: pointer;
-        }
-
-        .time-trocar:hover { background: #b9e2b3; }
-
-        .time-aviso {
-            margin: 10px 0 0;
-            min-height: 2.8em;
-            font-size: 12px;
-            line-height: 1.4;
-            text-align: center;
-        }
-
-        .time-aviso.com-erro { color: #a8281b; }
-
-        .mapa-aviso .erro,
-        .mapa-aviso .sem-area {
-            width: 100%;
-            margin: 0;
-        }
-
-        @media (max-width: 900px) {
-            .mapa-aviso { grid-row: 1; }
-        }
-
-        /* Link da mochila (alteracao do grupo) */
-        .acesso-placeholder[href] {
-            cursor: pointer;
-            text-decoration: none;
-            transition: transform .12s ease, background .12s ease;
-        }
-        .acesso-placeholder[href]:hover {
-            background: #e5efd9;
-            border-style: solid;
-            color: #385b43;
-            transform: translateY(-2px);
-        }
-
-        /* ===== ROLETA DE CAPTURA (aparece em cima do mapa) ===== */
-
-        body.roleta-aberta { overflow: hidden; }
-
-        .roleta-overlay {
-            position: fixed;
-            inset: 0;
-            z-index: 120;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 110px 16px 24px;
-            overflow-y: auto;
-            text-align: center;
-            color: #fff;
-            font-family: monospace;
-            background: rgba(5, 5, 5, 0.84);
-            backdrop-filter: blur(3px);
-            animation: roleta-aparecer 0.25s ease;
-        }
-
-        .roleta-overlay[hidden] { display: none; }
-        .roleta-dica-pular { color:#fff3c6; font-size:12px; margin:8px auto 12px; cursor:pointer; }
-        .roleta-overlay:not([hidden]) { cursor:pointer; }
-
-
-        @keyframes roleta-aparecer {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-
-        .roleta-titulo {
-            margin: 0 0 6px;
-            font-size: 26px;
-            letter-spacing: 4px;
-            text-transform: uppercase;
-        }
-
-        .roleta-sub {
-            min-height: 1.4em;
-            margin: 0 0 26px;
-            font-size: 13px;
-            letter-spacing: 2px;
-            color: #b8b8b8;
-        }
-
-        .roleta-palco {
-            position: relative;
-            width: min(86vw, 420px);
-            flex: none;
-        }
-
-        .roleta-roda {
-            display: block;
-            width: 100%;
-            height: auto;
-            transform-origin: 50% 50%;
-            filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.6));
-        }
-
-        /* Setinha fixa no topo: a fatia que parar embaixo dela e a sorteada. */
-        .roleta-seta {
-            position: absolute;
-            z-index: 2;
-            left: 50%;
-            top: -16px;
-            width: 0;
-            height: 0;
-            transform: translateX(-50%);
-            border-left: 15px solid transparent;
-            border-right: 15px solid transparent;
-            border-top: 30px solid #f3d86c;
-            filter: drop-shadow(0 2px 0 #20252a);
-        }
-
-        /* Aviso "Voce capturou ..." no topo da tela. */
-        .roleta-resultado {
-            position: absolute;
-            top: 22px;
-            left: 50%;
-            z-index: 3;
-            display: flex;
-            align-items: center;
-            gap: 14px;
-            max-width: min(94vw, 560px);
-            padding: 12px 18px;
-            border: 3px solid #292e31;
-            background: #eee9dc;
-            box-shadow: 4px 4px #42484b;
-            color: #20252a;
-            text-align: left;
-            line-height: 1.45;
-            opacity: 0;
-            visibility: hidden;
-            transform: translate(-50%, -18px);
-            transition: opacity 0.4s ease, transform 0.4s ease;
-        }
-
-        .roleta-resultado.visivel {
-            opacity: 1;
-            visibility: visible;
-            transform: translate(-50%, 0);
-        }
-
-        .roleta-resultado img {
-            width: 64px;
-            height: 64px;
-            flex: none;
-            object-fit: contain;
-            border: 2px solid #34383a;
-            border-radius: 50%;
-            background: #f8f4e8;
-        }
-
-        .roleta-resultado strong { display: block; font-size: 17px; }
-        .roleta-resultado span { font-size: 13px; }
-
-        @media (prefers-reduced-motion: reduce) {
-            .roleta-overlay { animation: none; }
-            .roleta-resultado { transition: none; }
-        }
-
-        /* Emoji do item no aviso da roleta (no lugar da foto do Pokemon) */
-        .roleta-resultado .roleta-emoji {
-            width: 64px;
-            height: 64px;
-            flex: none;
-            display: grid;
-            place-items: center;
-            font-size: 34px;
-            border: 2px solid #34383a;
-            border-radius: 50%;
-            background: #f8f4e8;
-        }
-
-        /* ===== EVENTO: SINAL ESTRANHO (trocar um Pokemon por outro) ===== */
-
-        .sinal-overlay {
-            position: fixed;
-            inset: 0;
-            z-index: 125;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 16px;
-            overflow-y: auto;
-            background: rgba(3, 8, 10, 0.88);
-            backdrop-filter: blur(3px);
-            animation: roleta-aparecer 0.25s ease;
-        }
-
-        .sinal-overlay[hidden] { display: none; }
-
-        .sinal-dialogo {
-            width: min(94vw, 720px);
-            max-height: 94vh;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            padding: 16px 18px 18px;
-            color: #d6ffe9;
-            font-family: monospace;
-            text-align: center;
-            background: #0b1d1b;
-            border: 3px solid #3fe0a0;
-            box-shadow: 0 0 22px rgba(63, 224, 160, 0.35), 6px 6px 0 #000;
-        }
-
-        .sinal-topo {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 11px;
-            letter-spacing: 2px;
-            color: #7be8bd;
-        }
-
-        .sinal-chiado { animation: sinal-piscar 1.1s steps(2, end) infinite; color: #ffe27a; }
-
-        @keyframes sinal-piscar { 50% { opacity: 0.25; } }
-
-        .sinal-dialogo h2 { margin: 0; font-size: 22px; letter-spacing: 3px; text-transform: uppercase; }
-        .sinal-texto { margin: 0; min-height: 2.6em; font-size: 13px; line-height: 1.5; color: #bfeede; }
-        .sinal-erro { margin: 0; min-height: 1.3em; font-size: 13px; color: #ff9a9a; }
-
-        .sinal-busca {
-            width: 100%;
-            padding: 9px 10px;
-            color: #d6ffe9;
-            font: inherit;
-            background: #06100f;
-            border: 2px solid #3fe0a0;
-            outline: none;
-        }
-
-        .sinal-lista {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
-            gap: 8px;
-            max-height: 44vh;
-            padding: 4px;
-            overflow-y: auto;
-        }
-
-        .sinal-card {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 4px;
-            padding: 8px 4px;
-            color: #d6ffe9;
-            font: inherit;
-            font-size: 12px;
-            background: #0f2a26;
-            border: 2px solid #2b6f5c;
-            cursor: pointer;
-        }
-
-        .sinal-card img { width: 56px; height: 56px; object-fit: contain; image-rendering: pixelated; }
-        .sinal-card small { color: #7fb8a5; font-size: 10px; }
-        .sinal-card:hover, .sinal-card:focus-visible { border-color: #3fe0a0; background: #14362f; outline: none; }
-        .sinal-card.escolhido { border-color: #ffe27a; background: #3a3414; box-shadow: 0 0 0 2px #ffe27a; }
-
-        .sinal-botoes { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
-
-        .sinal-botao {
-            padding: 10px 18px;
-            color: #d6ffe9;
-            font: inherit;
-            font-size: 13px;
-            letter-spacing: 1px;
-            background: transparent;
-            border: 2px solid #3fe0a0;
-            cursor: pointer;
-        }
-
-        .sinal-botao:hover:not(:disabled) { background: #3fe0a0; color: #06100f; }
-        .sinal-botao:disabled { opacity: 0.35; cursor: not-allowed; }
-        .sinal-botao.discreto { border-color: #4c6b64; color: #9fc4b8; }
-
-        .sinal-resultado { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 10px 0; }
-        .sinal-resultado img { width: 120px; height: 120px; object-fit: contain; image-rendering: pixelated; }
-
-        .sinal-resultado[hidden], .sinal-lista[hidden], .sinal-busca[hidden], .sinal-botao[hidden] { display: none; }
-
-        @media (prefers-reduced-motion: reduce) {
-            .sinal-overlay { animation: none; }
-            .sinal-chiado { animation: none; }
-        }
-
-        /* ===== POP-UP: ESCOLHA DO POKEMON INICIAL ===== */
-
-        body.inicial-aberto { overflow: hidden; }
-
-        .inicial-overlay {
-            position: fixed;
-            inset: 0;
-            z-index: 100;
-            display: flex;
-            padding: 20px;
-            overflow-y: auto;
-            background: rgba(5, 5, 5, 0.82);
-            backdrop-filter: blur(3px);
-            animation: inicial-aparecer 0.35s ease;
-        }
-
-        @keyframes inicial-aparecer {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-
-        .inicial-modal {
-            width: 100%;
-            max-width: 900px;
-            margin: auto;
-            text-align: center;
-            color: white;
-            font-family: Arial, sans-serif;
-        }
-
-        .inicial-modal h2 {
-            margin: 0 0 12px;
-            font-size: 28px;
-            letter-spacing: 5px;
-            text-transform: uppercase;
-        }
-
-        .inicial-subtitulo {
-            margin: 0 0 40px;
-            font-size: 12px;
-            letter-spacing: 3px;
-            color: #888;
-        }
-
-        .inicial-lista {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 35px;
-            padding: 15px 0;
-        }
-
-        /* CARD */
-
-        /* Centro Pokémon — painel com máquina de cura em estilo pixel-art. */
-        .cura-overlay {
-            position: fixed;
-            inset: 0;
-            z-index: 2500;
-            display: grid;
-            place-items: center;
-            padding: 18px;
-            overflow-y: auto;
-            background:
-                radial-gradient(ellipse at 50% 36%, rgba(48, 157, 181, .22), transparent 55%),
-                rgba(5, 13, 29, .90);
-            backdrop-filter: blur(9px);
-        }
-        .cura-overlay[hidden] { display: none; }
-        .cura-dialogo {
-            width: min(95vw, 540px);
-            padding: 22px 24px;
-            background: #f4f8f9;
-            border: 4px solid #233d56;
-            box-shadow: 8px 8px 0 #071522;
-            text-align: center;
-            color: #193650;
-        }
-        .cura-dialogo h2 { margin: 4px 0 8px; }
-        .cura-dialogo p { margin: 8px 0 15px; line-height: 1.5; }
-        .cura-fechar {
-            padding: 11px 22px;
-            font: bold 15px monospace;
-            color: #12304a;
-            background: #b9f6d8;
-            border: 3px solid #294e69;
-            cursor: pointer;
-        }
-        .cura-fechar:disabled { opacity: .55; cursor: not-allowed; }
-
-        #cura-overlay .cura-dialogo {
-            position: relative;
-            width: min(95vw, 570px);
-            padding: 0 22px 24px;
-            overflow: hidden;
-            color: #eaf9ff;
-            background:
-                linear-gradient(135deg, transparent 0 49%, rgba(255,255,255,.025) 50% 51%, transparent 52%) 0 0 / 27px 27px,
-                linear-gradient(180deg, #172c4b 0%, #101f36 100%);
-            border: 4px solid #09182a;
-            outline: 2px solid #517c97;
-            outline-offset: -9px;
-            box-shadow: 0 20px 70px rgba(0,0,0,.55), 9px 10px 0 #050e1c;
-        }
-        .cura-topbar {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 10px;
-            margin: 0 -22px 20px;
-            padding: 10px 20px;
-            border-bottom: 3px solid #09182a;
-            background: #e6516b;
-            box-shadow: inset 0 -4px #a72c4d;
-            color: #fff9f2;
-            font-size: 11px;
-            font-weight: 900;
-            letter-spacing: 1.4px;
-        }
-        .cura-topbar .cura-simbolo {
-            display: inline-grid;
-            place-items: center;
-            width: 27px;
-            height: 27px;
-            background: #fff;
-            border: 3px solid #9a2944;
-            color: #ce3954;
-            font-size: 21px;
-            line-height: 1;
-            box-shadow: 2px 2px 0 #9a2944;
-        }
-        .cura-topbar .cura-online {
-            color: #d7fff5;
-            font-size: 10px;
-            letter-spacing: .5px;
-            white-space: nowrap;
-        }
-        .cura-topbar .cura-online::before {
-            content: "";
-            display: inline-block;
-            width: 7px;
-            height: 7px;
-            margin-right: 6px;
-            background: #89ffbf;
-            box-shadow: 0 0 8px #7af5ad;
-        }
-        #cura-overlay .cura-etiqueta {
-            margin: 0;
-            color: #75dfe5;
-            font-size: 10px;
-            font-weight: 800;
-            letter-spacing: 3px;
-        }
-        #cura-overlay h2 {
-            margin: 7px 0 7px;
-            color: #fff;
-            font-size: clamp(23px, 4vw, 30px);
-            letter-spacing: .8px;
-            text-shadow: 3px 3px 0 #071323;
-        }
-        #cura-overlay .cura-intro {
-            margin: 0;
-            font-size: 12px;
-            color: #b9cedd;
-        }
-        .cura-cenario {
-            position: relative;
-            margin: 20px auto 12px;
-            padding: 6px 12px 15px;
-            max-width: 480px;
-            background:
-                radial-gradient(ellipse at 50% 90%, rgba(77,231,202,.15), transparent 63%),
-                linear-gradient(180deg, #132e48, #183b56 67%, #203950 67%);
-            border: 3px solid #09182a;
-            box-shadow: inset 0 0 0 3px #294860, 0 5px 0 #060e19;
-        }
-        .cura-cenario::before, .cura-cenario::after {
-            content: "✦";
-            position: absolute;
-            color: #63efd7;
-            font-size: 17px;
-            opacity: .7;
-            text-shadow: 0 0 15px #74ffdf;
-        }
-        .cura-cenario::before { top: 24%; left: 7%; }
-        .cura-cenario::after { right: 7%; bottom: 27%; font-size: 13px; }
-        .cura-maquina {
-            position: relative;
-            z-index: 1;
-            width: min(100%, 392px);
-            margin: 18px auto 0;
-            background: #f4ecdf;
-            border: 5px solid #14253e;
-            border-radius: 18px 18px 7px 7px;
-            box-shadow: inset 5px 0 #fff8ee, inset -7px 0 #bfc7d0, 6px 7px 0 #09172a;
-        }
-        .cura-coroa {
-            position: relative;
-            min-height: 56px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 12px;
-            margin: -5px -5px 0;
-            border: 5px solid #14253e;
-            border-radius: 17px 17px 5px 5px;
-            background: linear-gradient(180deg, #ff8a92 0 12%, #f05870 12% 70%, #bd2d54 70%);
-            box-shadow: inset 5px 0 #ffb4b6, inset -6px 0 #a9244d;
-        }
-        .cura-cruz {
-            display: grid;
-            place-items: center;
-            width: 31px;
-            height: 31px;
-            border-radius: 5px;
-            background: #fff9f2;
-            border: 3px solid #ad304e;
-            color: #ea4c6b;
-            font-size: 26px;
-            line-height: 1;
-            font-weight: 900;
-        }
-        .cura-marca {
-            color: #fff2ed;
-            font-size: 11px;
-            letter-spacing: 2px;
-            font-weight: bold;
-            text-shadow: 2px 2px #9a2548;
-        }
-        .cura-monitor {
-            display: grid;
-            grid-template-columns: 1fr auto;
-            align-items: center;
-            gap: 8px;
-            margin: 12px 19px 8px;
-            padding: 7px 9px;
-            min-height: 35px;
-            background: #102943;
-            border: 3px solid #576d86;
-            box-shadow: inset 0 0 12px #031327, 2px 2px 0 #a7b3c4;
-        }
-        .cura-monitor-texto {
-            min-width: 0;
-            color: #74ffe2;
-            font-size: 10px;
-            font-weight: 800;
-            letter-spacing: 1.5px;
-            text-align: left;
-            white-space: nowrap;
-            overflow: hidden;
-        }
-        .cura-visores { display: flex; gap: 5px; justify-content: flex-end; }
-        .cura-led {
-            width: 10px;
-            height: 10px;
-            border: 2px solid #36576f;
-            background: #406179;
-        }
-        .cura-led.aceso {
-            background: #9effdc;
-            box-shadow: 0 0 8px 2px #59e4d0;
-        }
-        .cura-bandeja {
-            min-height: 94px;
-            margin: 12px 19px;
-            padding: 16px 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: clamp(5px, 2vw, 11px);
-            background:
-                repeating-linear-gradient(90deg, transparent 0 26px, rgba(141,205,223,.045) 27px 29px),
-                linear-gradient(#102c44, #1b4561);
-            border: 4px solid #758ca1;
-            border-radius: 7px;
-            box-shadow: inset 0 6px 10px #071a30, 0 3px #c0c9d2;
-        }
-        .cura-bola {
-            position: relative;
-            display: block;
-            flex: 0 0 auto;
-            width: clamp(36px, 8.2vw, 53px);
-            height: clamp(36px, 8.2vw, 53px);
-            border: 4px solid #132338;
-            border-radius: 50%;
-            background: linear-gradient(#fa4b64 0 44%, #162439 45% 55%, #f8faf6 56% 100%);
-            box-shadow: inset -4px -5px #0002, inset 3px 2px #fff7, 0 4px 0 #071727;
-        }
-        .cura-bola::before {
-            content: "";
-            position: absolute;
-            left: 50%;
-            top: 50%;
-            width: 26%;
-            aspect-ratio: 1;
-            transform: translate(-50%, -50%);
-            border-radius: 50%;
-            border: 3px solid #132338;
-            background: #fbffff;
-            box-shadow: 0 0 0 2px #d2e2e5;
-        }
-        .cura-bola::after {
-            content: "✦";
-            position: absolute;
-            top: -13px;
-            right: -9px;
-            color: #9fffe3;
-            font-size: 17px;
-            opacity: 0;
-            text-shadow: 0 0 12px #74ffdf;
-        }
-        .cura-base {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin: 0 19px 14px;
-            color: #395675;
-            font-size: 10px;
-            font-weight: 900;
-            letter-spacing: 1px;
-        }
-        .cura-base .cura-detalhes {
-            width: 66px;
-            height: 10px;
-            background: repeating-linear-gradient(90deg, #526d84 0 8px, transparent 8px 13px);
-        }
-        .cura-informacoes {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: space-between;
-            align-items: center;
-            gap: 5px 12px;
-            color: #abd6e5;
-            font-size: 10px;
-            font-weight: bold;
-            letter-spacing: 1px;
-            text-transform: uppercase;
-        }
-        .cura-informacoes strong { color: #9bffe4; }
-        .cura-barra {
-            margin: 9px 0 12px;
-            height: 12px;
-            background: #06172b;
-            border: 2px solid #42617d;
-            overflow: hidden;
-        }
-        .cura-barra span {
-            display: block;
-            width: 0;
-            height: 100%;
-            background: repeating-linear-gradient(90deg, #53d3b5 0 16px, #85f3d7 16px 20px);
-            box-shadow: 0 0 15px #84f8d8;
-        }
-        .cura-overlay.curando .cura-bola {
-            animation: cura-rodar 1.05s linear infinite, cura-brilhar 1.05s ease-in-out infinite;
-            animation-delay: calc(var(--i) * 110ms);
-        }
-        .cura-overlay.curando .cura-bola::after {
-            animation: cura-faisca .7s ease-in-out infinite alternate;
-            animation-delay: calc(var(--i) * 100ms);
-        }
-        .cura-overlay.curando .cura-barra span { animation: cura-progresso 3.1s ease-in-out forwards; }
-        .cura-overlay.curando .cura-led { animation: cura-led-pulso .8s ease-in-out infinite alternate; }
-        .cura-overlay.concluido .cura-bola {
-            box-shadow: 0 0 16px 5px #79f6d0, inset -4px -5px #0002;
-        }
-        .cura-overlay.concluido .cura-barra span { width: 100%; }
-        .cura-overlay.concluido .cura-monitor-texto { color: #baffdf; }
-        #cura-overlay .cura-status {
-            min-height: 30px;
-            margin: 0 0 17px;
-            color: #dbf7f6;
-            font-size: 12px;
-            font-weight: bold;
-        }
-        #cura-overlay .cura-fechar {
-            width: min(100%, 310px);
-            min-height: 45px;
-            background: #9af5d7;
-            color: #112d3e;
-            border: 3px solid #061d2b;
-            box-shadow: 4px 4px 0 #060f1e;
-            font: 900 12px monospace;
-            letter-spacing: 1px;
-            text-transform: uppercase;
-            transition: transform .12s, box-shadow .12s, background .12s;
-        }
-        #cura-overlay .cura-fechar:hover:not(:disabled) {
-            transform: translate(2px, 2px);
-            box-shadow: 2px 2px 0 #060f1e;
-            background: #c0ffe8;
-        }
-        #cura-overlay .cura-fechar:focus-visible {
-            outline: 3px solid #fff;
-            outline-offset: 5px;
-        }
-        @keyframes cura-rodar {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-        }
-        @keyframes cura-brilhar {
-            50% { filter: brightness(1.4); box-shadow: 0 0 17px 6px #79f5d8; }
-        }
-        @keyframes cura-faisca {
-            to { opacity: 1; transform: translate(2px, -8px); }
-        }
-        @keyframes cura-led-pulso {
-            50% { filter: brightness(1.8); box-shadow: 0 0 11px #81ffda; }
-        }
-        @keyframes cura-progresso {
-            0% { width: 0; }
-            40% { width: 45%; }
-            75% { width: 77%; }
-            100% { width: 100%; }
-        }
-        @media (max-width: 470px) {
-            #cura-overlay .cura-dialogo { padding: 0 12px 17px; }
-            .cura-topbar { margin: 0 -12px 17px; padding: 9px 12px; }
-            .cura-cenario { padding: 4px 6px 12px; }
-            .cura-maquina { width: 100%; }
-            .cura-monitor, .cura-bandeja, .cura-base { margin-left: 9px; margin-right: 9px; }
-            .cura-bola { border-width: 3px; }
-            .cura-bola::before { border-width: 2px; }
-            .cura-topbar .cura-online { font-size: 8px; }
-        }
-        @media (prefers-reduced-motion: reduce) {
-            .cura-overlay.curando .cura-bola,
-            .cura-overlay.curando .cura-bola::after,
-            .cura-overlay.curando .cura-led,
-            .cura-overlay.curando .cura-barra span { animation: none; }
-            .cura-overlay.curando .cura-barra span { width: 100%; }
-        }
-
-        .inicial-card {
-            --cor: 255, 255, 255;
-
-            width: 230px;
-            height: 340px;
-            padding: 0;
-
-            position: relative;
-            overflow: hidden;
-
-            display: flex;
-            align-items: flex-end;
-            justify-content: center;
-
-            background: radial-gradient(circle at 50% 35%, rgba(var(--cor), 0.35), #111 70%);
-            border: 1px solid #333;
-            color: white;
-            font-family: Arial, sans-serif;
-            cursor: pointer;
-
-            transition:
-                transform 0.35s ease,
-                box-shadow 0.35s ease,
-                border-color 0.35s ease;
-        }
-
-        .inicial-card::before {
-            content: "";
-            position: absolute;
-            inset: 0;
-
-            background-image: var(--img);
-            background-size: contain;
-            background-position: center 40%;
-            background-repeat: no-repeat;
-
-            opacity: 0.25;
-            filter: grayscale(100%);
-
-            transition:
-                opacity 0.45s ease,
-                filter 0.45s ease,
-                transform 0.6s ease;
-        }
-
-        .inicial-card::after {
-            content: "";
-            position: absolute;
-            inset: 0;
-            background: linear-gradient(
-                to top,
-                rgba(0, 0, 0, 0.95),
-                rgba(0, 0, 0, 0.15) 65%,
-                rgba(0, 0, 0, 0.1)
-            );
-            pointer-events: none;
-        }
-
-        /* Hover indica que o card pode ser clicado, SEM parecer selecionado.
-           O brilho e a cor fortes ficam exclusivos da classe .selecionado. */
-        .inicial-card:hover:not(.selecionado),
-        .inicial-card:focus-visible:not(.selecionado) {
-            transform: translateY(-4px);
-            border-color: #6f7a85;
-            box-shadow: 0 8px 16px rgba(0, 0, 0, .35);
-        }
-        .inicial-card:focus-visible {
-            outline: 2px solid #fff;
-            outline-offset: 4px;
-        }
-
-        .inicial-card.selecionado {
-            transform: scale(1.05);
-            border-color: white;
-            box-shadow:
-                0 0 12px rgba(var(--cor), 0.7),
-                0 0 30px rgba(var(--cor), 0.35);
-        }
-
-        .inicial-card.selecionado::before {
-            opacity: 1;
-            filter: grayscale(0%);
-        }
-
-        .inicial-info {
-            position: relative;
-            z-index: 2;
-            width: 100%;
-            padding: 25px 10px;
-        }
-
-        .inicial-info h3 {
-            margin: 0;
-            font-size: 19px;
-            letter-spacing: 2px;
-            text-transform: uppercase;
-        }
-
-        .inicial-info p {
-            margin: 8px 0 0;
-            font-size: 10px;
-            letter-spacing: 2px;
-            color: #aaa;
-            text-transform: uppercase;
-        }
-
-        .inicial-info .inicial-status { color: #ddd; }
-
-        /* RODAPE: TEXTO + CONFIRMAR */
-
-        .inicial-selecao {
-            margin-top: 40px;
-            font-size: 13px;
-            letter-spacing: 3px;
-            color: #888;
-        }
-
-        .inicial-descricao {
-            max-width: 520px;
-            min-height: 3.2em;
-            margin: 12px auto 0;
-            font-size: 13px;
-            line-height: 1.6;
-            color: #aaa;
-        }
-
-        .inicial-erro {
-            min-height: 1.4em;
-            margin: 8px 0 0;
-            font-size: 13px;
-            color: #ff8585;
-        }
-
-        .inicial-confirmar {
-            margin-top: 14px;
-            padding: 14px 44px;
-            background: transparent;
-            color: white;
-            border: 1px solid white;
-            font-family: Arial, sans-serif;
-            font-size: 13px;
-            letter-spacing: 4px;
-            text-transform: uppercase;
-            cursor: pointer;
-            transition: background 0.3s ease, color 0.3s ease, opacity 0.3s ease;
-        }
-
-        .inicial-confirmar:hover:not(:disabled) {
-            background: white;
-            color: #050505;
-        }
-
-        .inicial-confirmar:disabled {
-            opacity: 0.3;
-            cursor: not-allowed;
-        }
-
-        @media (max-width: 650px) {
-            .inicial-lista { gap: 25px; }
-            .inicial-card { width: 200px; height: 290px; }
-            .inicial-modal h2 { font-size: 22px; letter-spacing: 3px; }
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-            .inicial-overlay { animation: none; }
-            .inicial-card, .inicial-card::before { transition: none; }
-        }
-        @media (max-width: 520px) {
-            .topo { align-items: stretch; }
-            .informacao { flex: 1; }
-            .mapa { min-height: 620px; }
-        }
-
-        .topo-acoes { display: flex; gap: 10px; flex-wrap: wrap; }
-        button.botao-menu { font: inherit; font-weight: bold; cursor: pointer; }
-        .botao-batalha { display: inline-block; margin-top: 8px; background: #f3d86c; }
-        .botao-batalha:hover { background: #ffe58a; }
-        .botao-reiniciar:hover { background: #f6d3cb; }
-        .botao-reiniciar:disabled { opacity: .5; cursor: wait; }
-        /* Icones vetoriais transparentes no mapa. */
-        .no-pixel-icon { display:block; width:42px; height:42px; image-rendering:pixelated; filter:drop-shadow(1px 2px 0 #21343e); }
-        .no { font-size:33px; }
-        .no-chefe { width:60px; height:60px; filter:drop-shadow(1px 2px 0 #21343e); }
-        /* Bigolin do mal: foto quadrada, entao vira medalhao redondo com brilho vermelho. */
-        .no-chefe-bigolin { border-radius:50%; object-fit:cover; image-rendering:auto; border:3px solid #c0392b; background:#fff;
-            box-shadow:0 0 10px 2px rgba(192,57,43,.75); animation:chefe-pulsa 1.8s ease-in-out infinite; }
-        @keyframes chefe-pulsa { 50% { box-shadow:0 0 18px 5px rgba(231,76,60,.95); } }
-        @media (prefers-reduced-motion: reduce) { .no-chefe-bigolin { animation:none; } }
-        .no-personagem { display:block; width:100%; height:100%; border-radius:50%; object-fit:cover; pointer-events:none; user-select:none; }
-        .acessos-laterais .painel-inferior, .acessos-laterais .legenda {
-            width:100%; margin:12px 0 0; padding:12px 10px;
-            box-shadow:2px 3px #42484b; font-size:11px; line-height:1.65;
-            overflow-wrap:anywhere;
-        }
-        .legenda-grade { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px 4px; }
-        .legenda-grade span { display:flex; align-items:center; gap:4px; min-width:0; }
-        .legenda-grade img { width:22px; height:22px; object-fit:contain; }
-        .area-jogo { width:min(calc(100% - 26px),1200px); grid-template-columns:minmax(210px,252px) minmax(0,620px) minmax(200px,258px); gap:14px; }
-        .area-jogo .mapa { min-height:570px; height:min(82vh,850px); }
-        .indice-area { margin-top:8px; }
-        h1 { margin:9px 8px 13px; }
-        @media (max-width:900px) {
-            .area-jogo { grid-template-columns:minmax(0,1fr); width:min(calc(100% - 22px),620px); }
-            .area-jogo .mapa { min-height:560px; height:min(118vw,850px); }
-            .acessos-laterais { display:block; }
-            .acessos-laterais .painel-inferior, .acessos-laterais .legenda { grid-column:auto; }
-        }
-    </style>
-    <link rel="stylesheet" href="assets/peakui.css">
+    <link rel="stylesheet" href="assets/css/mapa.css">
+    <link rel="stylesheet" href="assets/css/peakui.css">
 </head>
 <body>
 
@@ -1634,26 +275,28 @@ $corPorTipo = static function (string $tipo): string {
         <span> | Pokédollars: <strong><?= $dados !== null ? (int) $dados['perfil']['dinheiro'] : 0 ?></strong></span>
     </div>
     <div class="topo-acoes">
-        <a class="botao-menu" href="perfis.php">⇦ Trocar perfil</a>
+        <a class="botao-menu" href="index.php?pagina=perfis">⇦ Trocar perfil</a>
         <button type="button" class="botao-menu botao-reiniciar" id="botao-reiniciar">↻ Reiniciar perfil</button>
     </div>
 </header>
 
-<?php if ($mapaPronto): ?>
-    <p class="indice-area">
-        ÁREA <?= str_pad((string) (int) $dados['area']['ordem'], 2, '0', STR_PAD_LEFT) ?>
-        • DESAFIO FINAL: <?= $escapar($dados['area']['chefe_nome']) ?>
-    </p>
-<?php endif; ?>
-
-<h1>
-    <?= $dados !== null && $dados['area'] !== null
-        ? $escapar($dados['area']['nome'])
-        : 'PEAKMON: THE BIGOLIN CRISIS' ?>
-</h1>
 
 <main>
     <div class="area-jogo">
+        <div class="cabecalho-mapa">
+            <?php if ($mapaPronto): ?>
+                <p class="indice-area">
+                    ÁREA <?= str_pad((string) (int) $dados['area']['ordem'], 2, '0', STR_PAD_LEFT) ?>
+                    • DESAFIO FINAL: <?= $escapar($dados['area']['chefe_nome']) ?>
+                </p>
+            <?php endif; ?>
+            <h1>
+                <?= $dados !== null && $dados['area'] !== null
+                    ? $escapar($dados['area']['nome'])
+                    : 'PEAKMON: THE BIGOLIN CRISIS' ?>
+                <small>Mapa da jornada • escolha seu próximo caminho</small>
+            </h1>
+        </div>
         <aside class="time" aria-label="Seu time">
             <h2 class="time-titulo">SEU TIME</h2>
 
@@ -1664,10 +307,20 @@ $corPorTipo = static function (string $tipo): string {
 
                         <div class="time-card" role="button" tabindex="0" aria-label="Posição <?= (int) $posicao ?> do time">
                             <?php if ($slot !== null): ?>
+                                <?php
+                                    $hpMax = max(1, (int) $slot['hp_max']);
+                                    $hpAtual = max(0, (int) $slot['hp_atual']);
+                                    $hpPercentual = (int) max(0, min(100, round(($hpAtual / $hpMax) * 100)));
+                                    $classeHp = $hpPercentual <= 25 ? ' hp-baixa' : ($hpPercentual <= 55 ? ' hp-media' : '');
+                                ?>
                                 <div class="time-foto" style="--cor: <?= $corPorTipo((string) $slot['tipo']) ?>; --img: url('<?= $escapar($slot['imagem']) ?>');"></div>
                                 <div class="time-dados">
-                                    <strong><?= $escapar($slot['nome']) ?></strong>
-                                    <span><?= $escapar($slot['tipo']) ?> • HP <?= (int) $slot['hp_atual'] ?>/<?= (int) $slot['hp_max'] ?></span>
+                                    <div class="time-topo">
+                                        <strong><?= $escapar($slot['nome']) ?></strong>
+                                        <span class="time-tipo" style="--cor: <?= $corPorTipo((string) $slot['tipo']) ?>;"><?= $escapar($slot['tipo']) ?></span>
+                                    </div>
+                                    <span class="time-hp-text">HP <?= $hpAtual ?>/<?= $hpMax ?></span>
+                                    <span class="time-hp-barra"><span class="time-hp-preenchimento<?= $classeHp ?>" style="width: <?= $hpPercentual ?>%;"></span></span>
                                     <?php if ((int) $slot['desmaiado'] === 1): ?><em>DESMAIADO</em><?php endif; ?>
                                 </div>
                             <?php else: ?>
@@ -1692,7 +345,7 @@ $corPorTipo = static function (string $tipo): string {
                 <?php elseif ($dados['area'] === null): ?>
                     <div class="sem-area">
                         <h2>O mapa ainda nao foi cadastrado!</h2>
-                        <p>O banco ainda nao tem o mapa. Importe o arquivo <strong>peakmon_base.sql</strong> no MySQL.</p>
+                        <p>O banco ainda nao tem o mapa. Importe o arquivo <strong>database/peakmon_base.sql</strong> no MySQL.</p>
                     </div>
                 <?php else: ?>
                     <div class="sem-area">
@@ -1702,10 +355,20 @@ $corPorTipo = static function (string $tipo): string {
                 <?php endif; ?>
             </div>
         <?php else: ?>
+        <section class="mapa-coluna">
         <section class="mapa" aria-label="Mapa da area">
             <svg class="caminhos" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
                 <?php foreach ($dados['conexoes'] as $conexao): ?>
+                    <?php
+                        $classeCaminho = '';
+                        if ((int) $conexao['id_no_origem'] === $idNoAtual && in_array((int) $conexao['id_no_destino'], $idsProximos, true)) {
+                            $classeCaminho = ' caminho-disponivel';
+                        } elseif ((int) $conexao['id_no_destino'] === $idNoAtual) {
+                            $classeCaminho = ' caminho-atual';
+                        }
+                    ?>
                     <line
+                        class="<?= trim($classeCaminho) ?>"
                         x1="<?= max(3, min(97, (int) $conexao['origem_x'])) ?>"
                         y1="<?= max(3, min(97, (int) $conexao['origem_y'])) ?>"
                         x2="<?= max(3, min(97, (int) $conexao['destino_x'])) ?>"
@@ -1734,7 +397,7 @@ $corPorTipo = static function (string $tipo): string {
                 <?php if ($proximo): ?>
                     <button
                         type="button"
-                        class="no"
+                        class="no disponivel"
                         style="left: <?= $x ?>%; top: <?= $y ?>%;"
                         data-id-no-destino="<?= $idNo ?>"
                         data-tipo="<?= $escapar($no['tipo_no']) ?>"
@@ -1755,52 +418,58 @@ $corPorTipo = static function (string $tipo): string {
                 <?php endif; ?>
             <?php endforeach; ?>
         </section>
+        <?php if ($mapaPronto): ?>
+            <div class="mapa-rodape">
+                <section class="legenda" aria-label="Legenda do mapa">
+                    <strong>LEGENDA</strong>
+                    <div class="legenda-grade">
+                        <span>🌿 Mato</span><span>🥋 Treinador</span><span><img src="images/mapa/captura.svg" alt=""> Captura</span><span><img src="images/mapa/item.svg" alt=""> Item</span>
+                        <span>🛒 Loja</span><span>🏥 Centro</span><span><img src="images/mapa/evento.svg" alt=""> Evento</span><span><img src="<?= $imagemDoChefe($dados['area']['chefe_nome'] ?? null) ?>" alt="" style="border-radius:50%;object-fit:cover"> Chefe</span>
+                    </div>
+                </section>
+            </div>
+        <?php endif; ?>
+        </section>
         <?php endif; ?>
 
         <aside class="acessos-laterais" aria-label="Acessos do jogo">
             <h2 class="acessos-titulo">ACESSOS</h2>
 
-            <a class="acesso-placeholder" href="mochila.php" aria-label="Abrir mochila e gerenciar itens e Pokemon">
+            <a class="acesso-placeholder" href="index.php?pagina=mochila" aria-label="Abrir mochila e gerenciar itens e Pokemon">
                 <span class="acesso-icone" aria-hidden="true">🎒</span>
                 <span>MOCHILA</span>
+                <span class="acesso-subtitulo">Equipe, arquivo e itens</span>
             </a>
 
-            <a class="acesso-placeholder" href="loja.php" aria-label="Abrir loja e comprar itens">
+            <a class="acesso-placeholder" href="index.php?pagina=loja" aria-label="Abrir loja e comprar itens">
                 <span class="acesso-icone" aria-hidden="true">🛒</span>
                 <span>LOJA</span>
+                <span class="acesso-subtitulo">Compre suprimentos da jornada</span>
             </a>
 
-            <a class="acesso-placeholder" href="historico.php" aria-label="Abrir histórico de batalhas e eventos">
+            <a class="acesso-placeholder" href="index.php?pagina=historico" aria-label="Abrir histórico de batalhas e eventos">
                 <span class="acesso-icone" aria-hidden="true">📜</span>
                 <span>HISTÓRICO</span>
+                <span class="acesso-subtitulo">Registros da aventura</span>
             </a>
-            <p class="acesso-legenda">Seu progresso e os registros da jornada.</p>
+            <p class="acesso-legenda">Gerencie sua jornada pelos acessos rápidos ao lado.</p>
             <?php if ($mapaPronto): ?>
-            <section class="painel-inferior">
-                <?php if (($tipoNoAtual === 'BATALHA' || $tipoNoAtual === 'CHEFE') && !$dados['batalha_vencida']): ?>
-                    <strong>Você chegou a um ponto de batalha!</strong>
-                    <p>O caminho seguinte será liberado depois da vitória.</p>
-                    <a class="botao-menu botao-batalha" href="batalha.php">⚔ Ir para a batalha</a>
-                <?php elseif (($tipoNoAtual === 'BATALHA' || $tipoNoAtual === 'CHEFE') && $dados['batalha_vencida']): ?>
-                    <strong>Batalha vencida!</strong>
-                    <p>Agora você pode escolher um dos próximos caminhos.</p>
-                <?php elseif ($dados['progresso']['estado'] === 'CONCLUIDA'): ?>
-                    <strong>Área concluída!</strong>
-                    <p>Você chegou ao final deste mapa.</p>
-                <?php else: ?>
-                    <strong>Ponto atual:</strong> <?= $escapar($dados['progresso']['no_atual_titulo'] ?? 'Inicio') ?>
-                    <p>Clique em um dos pontos destacados para escolher seu próximo caminho.</p>
-                <?php endif; ?>
-            </section>
-            <section class="legenda" aria-label="Legenda do mapa">
-                <strong>LEGENDA</strong>
-                <div class="legenda-grade">
-                    <span>🌿 Mato</span><span>🥋 Treinador</span>
-                    <span><img src="images/mapa/captura.svg" alt=""> Captura</span><span><img src="images/mapa/item.svg" alt=""> Item</span>
-                    <span>🛒 Loja</span><span>🏥 Centro</span>
-                    <span><img src="images/mapa/evento.svg" alt=""> Evento</span><span><img src="<?= $imagemDoChefe($dados['area']['chefe_nome'] ?? null) ?>" alt="" style="border-radius:50%;object-fit:cover"> Chefe</span>
-                </div>
-            </section>
+                <section class="painel-inferior">
+                    <?php if (($tipoNoAtual === 'BATALHA' || $tipoNoAtual === 'CHEFE') && !$dados['batalha_vencida']): ?>
+                        <strong>Você chegou a um ponto de batalha!</strong>
+                        <p>O caminho seguinte será liberado depois da vitória.</p>
+                        <a class="botao-menu botao-batalha" href="index.php?pagina=batalha">⚔ Ir para a batalha</a>
+                    <?php elseif (($tipoNoAtual === 'BATALHA' || $tipoNoAtual === 'CHEFE') && $dados['batalha_vencida']): ?>
+                        <strong>Batalha vencida!</strong>
+                        <p>Agora você pode escolher um dos próximos caminhos.</p>
+                    <?php elseif ($dados['progresso']['estado'] === 'CONCLUIDA'): ?>
+                        <strong>Área concluída!</strong>
+                        <p>Você chegou ao final deste mapa.</p>
+                    <?php else: ?>
+                        <strong>Ponto atual: <?= $escapar($dados['progresso']['no_atual_titulo'] ?? 'Inicio') ?></strong>
+                        <p>Clique em um dos pontos destacados para escolher seu próximo caminho.</p>
+                    <?php endif; ?>
+                </section>
             <?php endif; ?>
         </aside>
         </div>
@@ -1949,7 +618,7 @@ $corPorTipo = static function (string $tipo): string {
         <path></path><g></g><image></image><text></text><circle></circle>
     </svg>
 </template>
-<script src="assets/peakui.js"></script>
+<script src="assets/js/peakui.js"></script>
 <script>
     // Modelos sao declarados no HTML para respeitar a restricao do professor.
     function clonarMapa(tag) {
@@ -2291,7 +960,7 @@ $corPorTipo = static function (string $tipo): string {
             corpo.set('acao', acao);
             Object.keys(extra || {}).forEach((chave) => corpo.set(chave, extra[chave]));
 
-            const resposta = await fetch('mapa.php', {
+            const resposta = await fetch('index.php?pagina=mapa', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
@@ -2499,7 +1168,7 @@ $corPorTipo = static function (string $tipo): string {
             dados.set('id_no_destino', botao.dataset.idNoDestino);
 
             try {
-                const resposta = await fetch('mapa.php', {
+                const resposta = await fetch('index.php?pagina=mapa', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/x-www-form-urlencoded',
@@ -2555,7 +1224,7 @@ $corPorTipo = static function (string $tipo): string {
 
                 // Mato, treinador ou chefe: segue direto para a tela de batalha.
                 if (resultado.no && (resultado.no.tipo_no === 'BATALHA' || resultado.no.tipo_no === 'CHEFE')) {
-                    window.location.href = 'batalha.php';
+                    window.location.href = 'index.php?pagina=batalha';
                     return;
                 }
 
@@ -2577,7 +1246,7 @@ $corPorTipo = static function (string $tipo): string {
         sessionStorage.setItem(chave, '1');
         const entrar = await PeakUI.confirm('Você está em um ponto de combate. Deseja batalhar agora?',
             {title:'⚔ Batalha pendente', okText:'Iniciar batalha'});
-        if (entrar) window.location.href = 'batalha.php';
+        if (entrar) window.location.href = 'index.php?pagina=batalha';
     });
     <?php endif; ?>
 
@@ -2624,7 +1293,7 @@ $corPorTipo = static function (string $tipo): string {
             dados.set('id_pokemon', idEscolhido);
 
             try {
-                const resposta = await fetch('mapa.php', {
+                const resposta = await fetch('index.php?pagina=mapa', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/x-www-form-urlencoded',
@@ -2702,7 +1371,7 @@ $corPorTipo = static function (string $tipo): string {
             dados.set('para', slot.dataset.posicao);
 
             try {
-                const resposta = await fetch('mapa.php', {
+                const resposta = await fetch('index.php?pagina=mapa', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/x-www-form-urlencoded',
@@ -2772,7 +1441,7 @@ $corPorTipo = static function (string $tipo): string {
             dados.set('acao', 'reiniciar_perfil');
 
             try {
-                const resposta = await fetch('mapa.php', {
+                const resposta = await fetch('index.php?pagina=mapa', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/x-www-form-urlencoded',

@@ -1,7 +1,13 @@
 <?php
 declare(strict_types=1);
 
-require_once __DIR__ . '/app/iniciar_sessao.php';
+if (!defined('PEAKMON_ROOT')) {
+    http_response_code(404);
+    exit;
+}
+
+
+require_once PEAKMON_ROOT . '/app/iniciar_sessao.php';
 
 // Apaga os dados da sessão no servidor.
 $_SESSION = [];
@@ -22,5 +28,5 @@ if (ini_get('session.use_cookies')) {
 
 session_destroy();
 
-header('Location: menu inicial/menu.html');
+header('Location: menu%20inicial/menu.html');
 exit;

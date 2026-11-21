@@ -1,11 +1,17 @@
 <?php
 declare(strict_types=1);
 
+if (!defined('PEAKMON_ROOT')) {
+    http_response_code(404);
+    exit;
+}
+
+
 use Peakmon\Models\Batalha;
 use Peakmon\Models\Mochila;
 
-require_once __DIR__ . '/app/sessao.php';
-require_once __DIR__ . '/app/autoload.php';
+require_once PEAKMON_ROOT . '/app/sessao.php';
+require_once PEAKMON_ROOT . '/app/autoload.php';
 
 $ehPost = $_SERVER['REQUEST_METHOD'] === 'POST';
 
@@ -21,7 +27,7 @@ if (!isset($_SESSION['usuario_id'], $_SESSION['perfil_id'])) {
         exit;
     }
 
-    header('Location: perfis.php');
+    header('Location: index.php?pagina=perfis');
     exit;
 }
 
@@ -38,7 +44,7 @@ $perfil = ['nome_perfil' => (string) ($_SESSION['perfil_nome'] ?? 'Perfil'), 'di
 $mensagemErro = null;
 
 try {
-    $pdo = require __DIR__ . '/config/database.php';
+    $pdo = require PEAKMON_ROOT . '/config/database.php';
     $controller = new \Peakmon\Controllers\BatalhaController($pdo, new Batalha($pdo), new Mochila($pdo));
     if ($ehPost) {
         header('Content-Type: application/json; charset=utf-8');
@@ -66,7 +72,7 @@ try {
 
     // Nada para lutar aqui (batalha ja vencida, ponto sem batalha...): volta ao mapa.
     if ($erro->getCode() === Batalha::SEM_BATALHA) {
-        header('Location: mapa.php');
+        header('Location: index.php?pagina=mapa');
         exit;
     }
 
@@ -131,554 +137,8 @@ $imgArnaldo = 'images/pokemon/Armaldo.png';
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Peakmon - Batalha</title>
 
-    <style>
-        * { box-sizing: border-box; }
-
-        body {
-            margin: 0;
-            min-height: 100vh;
-            overflow-x: hidden;
-            font-family: monospace;
-            color: #20252a;
-            background: linear-gradient(
-                to bottom,
-                #75c8f4 0%,
-                #8bd7f7 45%,
-                #e5f4f5 46%,
-                #9acb70 47%,
-                #7eaa6b 100%
-            );
-            background-attachment: fixed;
-        }
-
-        .topo {
-            width: min(calc(100% - 40px), 1100px);
-            margin: 18px auto 12px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 12px;
-            flex-wrap: wrap;
-        }
-
-        .informacao, .botao {
-            background: #eee9dc;
-            border: 3px solid #292e31;
-            box-shadow: 3px 3px #42484b;
-            padding: 10px 14px;
-            color: #20252a;
-        }
-
-        .informacao strong { color: #385b43; }
-
-        .botao {
-            font: inherit;
-            font-weight: bold;
-            text-decoration: none;
-            cursor: pointer;
-            display: inline-block;
-        }
-
-        .botao:hover:not(:disabled) { background: #d9efd5; }
-        .botao:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
-        .botao:disabled { opacity: .5; cursor: not-allowed; }
-
-        .botao.principal {
-            background: #f3d86c;
-            font-size: 18px;
-            padding: 14px 34px;
-        }
-        .botao.principal:hover:not(:disabled) { background: #ffe58a; }
-
-        h1 {
-            text-align: center;
-            margin: 12px 8px 4px;
-            font-size: clamp(18px, 3vw, 25px);
-            text-shadow: 1px 2px #fff;
-        }
-
-        .subtitulo {
-            margin: 0 8px 18px;
-            text-align: center;
-            font-size: 13px;
-        }
-
-        .painel {
-            background: #eee9dc;
-            border: 3px solid #292e31;
-            box-shadow: 4px 4px #42484b;
-            padding: 12px;
-        }
-
-        .painel h2 {
-            margin: 0 0 10px;
-            font-size: 16px;
-            text-align: center;
-        }
-
-        .erro {
-            width: min(94vw, 620px);
-            margin: 20px auto;
-            padding: 14px;
-            background: #fff0e8;
-            border: 3px solid #a84d38;
-            color: #7d281b;
-            line-height: 1.5;
-        }
-
-        main { width: min(calc(100% - 24px), 1100px); margin: 0 auto 40px; }
-        [hidden] { display: none !important; }
-
-        /* ===== ANTES DA LUTA ===== */
-
-        .previa {
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-            gap: 18px;
-            align-items: start;
-        }
-
-        .lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-
-        .slot { display: flex; align-items: center; gap: 6px; }
-        .slot-numero { width: 18px; flex: none; text-align: center; font-weight: bold; color: #385b43; }
-
-        .cartao {
-            flex: 1;
-            min-width: 0;
-            min-height: 58px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 5px 8px;
-            background: #f8f4e8;
-            border: 2px solid #34383a;
-            font: inherit;
-            color: inherit;
-            text-align: left;
-        }
-
-        button.cartao { cursor: pointer; }
-        button.cartao:hover:not(:disabled), button.cartao:focus-visible { background: #e1f0dc; outline: none; }
-        .cartao.vazio { justify-content: center; opacity: .6; }
-        .cartao.desmaiado { opacity: .55; filter: grayscale(.8); }
-        .slot.selecionado .cartao { background: #f3d86c; border-color: #20252a; box-shadow: 0 0 0 3px #fff; opacity: 1; }
-
-        .foto {
-            width: 42px;
-            height: 42px;
-            flex: none;
-            border: 2px solid #34383a;
-            border-radius: 50%;
-            background: #fff;
-            background-image: var(--img);
-            background-size: contain;
-            background-position: center;
-            background-repeat: no-repeat;
-        }
-
-        .dados { display: flex; flex-direction: column; min-width: 0; font-size: 12px; line-height: 1.35; flex: 1; }
-        .dados strong { font-size: 14px; }
-        .dados em { color: #a84d38; font-style: normal; font-weight: bold; }
-
-        .mini-barra { height: 6px; margin-top: 3px; background: #c9c2b0; border: 1px solid #34383a; }
-        .mini-barra > span { display: block; height: 100%; background: #5fae5f; }
-        .mini-barra > span.medio { background: #e0b43a; }
-        .mini-barra > span.baixo { background: #c84a38; }
-
-        .adversario-cabeca {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 12px;
-            padding: 8px 10px;
-            border: 2px solid #34383a;
-            background: #f8f4e8;
-            font-weight: bold;
-        }
-        .adversario-cabeca .emoji { font-size: 26px; }
-
-        .acoes { margin: 20px 0 0; text-align: center; }
-        .dica { margin: 10px 0 0; min-height: 2.6em; font-size: 12px; line-height: 1.4; text-align: center; }
-        .dica.com-erro { color: #a8281b; }
-
-        /* ===== ARENA ===== */
-
-        .arena-bloco { display: flex; flex-direction: column; gap: 12px; }
-
-        .fila { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; min-height: 34px; }
-        .fila .chip {
-            width: 34px;
-            height: 34px;
-            border: 2px solid #34383a;
-            border-radius: 50%;
-            background: #f8f4e8;
-            background-image: var(--img);
-            background-size: contain;
-            background-position: center;
-            background-repeat: no-repeat;
-            transition: opacity .3s, filter .3s;
-        }
-        .fila .chip.ativo { box-shadow: 0 0 0 3px #f3d86c; }
-        .fila .chip.fora { opacity: .35; filter: grayscale(1); }
-        .fila .chip.espera { opacity: .8; }
-
-        .arena {
-            position: relative;
-            width: 100%;
-            aspect-ratio: 16 / 10;
-            min-height: 330px;
-            overflow: hidden;
-            border: 4px solid #24292a;
-            box-shadow: 5px 5px #40494b;
-            background:
-                radial-gradient(ellipse 28% 9% at 76% 47%, rgba(0,0,0,.22), transparent 70%),
-                radial-gradient(ellipse 30% 10% at 24% 90%, rgba(0,0,0,.22), transparent 70%),
-                linear-gradient(to bottom, #8bd7f7 0%, #bfe8f6 45%, #a8d27c 46%, #7eaa6b 100%);
-        }
-
-        .sprite {
-            position: absolute;
-            width: clamp(110px, 24%, 190px);
-            aspect-ratio: 1;
-            background-image: var(--img);
-            background-size: contain;
-            background-position: center bottom;
-            background-repeat: no-repeat;
-            filter: drop-shadow(0 4px 0 rgba(0,0,0,.2));
-        }
-        .sprite.inimigo { right: 12%; top: 8%; }
-        .sprite.jogador { left: 12%; bottom: 4%; }
-        .sprite.fora { opacity: 0; transform: translateY(30px); transition: opacity .5s, transform .5s; }
-
-        .sprite.entra-inimigo { animation: entra-direita .55s ease-out; }
-        .sprite.entra-jogador { animation: entra-esquerda .55s ease-out; }
-        .sprite.golpe-jogador { animation: golpe-jogador .45s ease-in-out; }
-        .sprite.golpe-inimigo { animation: golpe-inimigo .45s ease-in-out; }
-        .sprite.levou { animation: levou .45s linear; }
-
-        @keyframes entra-direita { from { transform: translateX(120%); opacity: 0; } to { transform: none; opacity: 1; } }
-        @keyframes entra-esquerda { from { transform: translateX(-120%); opacity: 0; } to { transform: none; opacity: 1; } }
-        @keyframes golpe-jogador { 40% { transform: translate(55%, -35%) scale(1.08); } 100% { transform: none; } }
-        @keyframes golpe-inimigo { 40% { transform: translate(-55%, 35%) scale(1.08); } 100% { transform: none; } }
-        @keyframes levou {
-            0%, 100% { transform: none; filter: drop-shadow(0 4px 0 rgba(0,0,0,.2)); }
-            20% { transform: translateX(-8px); filter: brightness(2.2) drop-shadow(0 4px 0 rgba(0,0,0,.2)); }
-            40% { transform: translateX(8px); }
-            60% { transform: translateX(-6px); filter: brightness(1.6) drop-shadow(0 4px 0 rgba(0,0,0,.2)); }
-            80% { transform: translateX(4px); }
-        }
-
-        .placa {
-            position: absolute;
-            width: min(46%, 270px);
-            padding: 7px 10px;
-            border: 3px solid #292e31;
-            background: #eee9dc;
-            box-shadow: 3px 3px #42484b;
-            font-size: 12px;
-            line-height: 1.4;
-        }
-        .placa.inimigo { left: 3%; top: 6%; }
-        .placa.jogador { right: 3%; bottom: 8%; }
-        .placa strong { font-size: 14px; }
-        .placa .tipo { color: #5d5849; }
-        /* Condicao (queimadura, congelamento...) ao lado do nome do Pokemon. */
-        .condicao {
-            display: inline-block;
-            margin: 0 3px 0 4px;
-            padding: 0 6px;
-            border: 2px solid var(--cond-borda);
-            background: var(--cond-fundo);
-            color: var(--cond-texto);
-            font-size: 10px;
-            font-weight: bold;
-            letter-spacing: .5px;
-            line-height: 1.5;
-            vertical-align: 1px;
-            white-space: nowrap;
-        }
-        .condicao.novo { animation: condicao-pop .6s ease-out; }
-        .condicao-queimadura { --cond-fundo: #ff8a3d; --cond-borda: #b3220f; --cond-texto: #4a0d00; }
-        .condicao-congelamento { --cond-fundo: #8be9ff; --cond-borda: #0a6fb8; --cond-texto: #05324f; }
-        .condicao-paralisia { --cond-fundo: #ffe14d; --cond-borda: #a87b00; --cond-texto: #4a3600; }
-        .condicao-veneno { --cond-fundo: #c58cff; --cond-borda: #6b2aa8; --cond-texto: #2e0c52; }
-        .condicao-sono { --cond-fundo: #b9c4e8; --cond-borda: #4a5a99; --cond-texto: #1c2650; }
-        @keyframes condicao-pop { 0% { transform: scale(2.2); opacity: 0; } 60% { transform: scale(.9); opacity: 1; } 100% { transform: none; } }
-        .barra { height: 10px; margin-top: 5px; background: #c9c2b0; border: 2px solid #34383a; }
-        .barra > span { display: block; height: 100%; width: 100%; background: #5fae5f; transition: width .5s ease-out, background .3s; }
-        .barra > span.medio { background: #e0b43a; }
-        .barra > span.baixo { background: #c84a38; }
-
-        .flutuante {
-            position: absolute;
-            z-index: 5;
-            font-size: 26px;
-            font-weight: bold;
-            color: #fff;
-            text-shadow: 2px 2px 0 #292e31, -1px -1px 0 #292e31, 1px -1px 0 #292e31, -1px 1px 0 #292e31;
-            pointer-events: none;
-            animation: subir 1s ease-out forwards;
-        }
-        .flutuante.super { color: #ffd34d; font-size: 32px; }
-        .flutuante.fraco { color: #b9c4cc; font-size: 22px; }
-        .flutuante.nada { color: #b9c4cc; font-size: 18px; }
-        @keyframes subir { from { transform: translateY(0); opacity: 1; } to { transform: translateY(-48px); opacity: 0; } }
-
-        .rodape-arena { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: start; }
-
-        /* Registro da batalha: um cartao por turno, com uma linha por acao. */
-        .registro {
-            height: 200px;
-            margin: 0;
-            padding: 6px;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-            font-size: 12px;
-            line-height: 1.45;
-            background: #f8f4e8;
-            border: 2px solid #34383a;
-        }
-        .turno-bloco { flex: none; border: 2px solid #34383a; background: #fffdf5; }
-        .turno-titulo {
-            padding: 2px 8px;
-            background: #34383a;
-            color: #f8f4e8;
-            font-size: 11px;
-            font-weight: bold;
-            letter-spacing: .08em;
-            text-transform: uppercase;
-        }
-        .turno-corpo { display: flex; flex-direction: column; }
-        .registro .linha { padding: 3px 8px; border-left: 4px solid transparent; border-bottom: 1px dashed #d9d1ba; }
-        .registro .linha:last-child { border-bottom: 0; }
-        .registro .linha.lado-jogador { border-left-color: #3f7a4f; }
-        .registro .linha.lado-inimigo { border-left-color: #b5533c; }
-        .registro .linha.entra { color: #385b43; font-weight: bold; }
-        .registro .linha.desmaia { color: #a84d38; font-weight: bold; background: #f6e3dd; }
-        .registro .linha.fim { font-weight: bold; background: #efe6c4; }
-        .linha-detalhe { display: flex; flex-wrap: wrap; gap: 3px 6px; margin-top: 2px; }
-        .linha-detalhe span { padding: 0 6px; border: 1px solid #34383a; background: #f2ecd9; font-size: 11px; }
-        .linha-detalhe .dano { background: #f6d3cb; color: #7a2e1c; font-weight: bold; }
-        .linha-detalhe .hp-restante { background: #dbeed6; color: #264a30; }
-        .linha-detalhe .super { background: #ffe58a; font-weight: bold; }
-        .linha-detalhe .fraco { background: #d8dde0; }
-        .linha-detalhe .critico { background: #ffb3a1; font-weight: bold; }
-
-        .controles { display: flex; flex-direction: column; gap: 6px; }
-        .controles .botao { padding: 7px 12px; font-size: 13px; text-align: center; }
-        .controles .botao[aria-pressed="true"] { background: #f3d86c; }
-
-        /* ===== RESULTADO ===== */
-
-        .resultado {
-            margin: 4px auto 0;
-            max-width: 520px;
-            text-align: center;
-            line-height: 1.6;
-        }
-        .resultado h2 { font-size: 22px; margin: 0 0 6px; }
-        .resultado .ouro { font-size: 20px; font-weight: bold; color: #385b43; }
-        .resultado.derrota h2 { color: #a84d38; }
-        .resultado .botoes { margin-top: 14px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
-
-        .painel-combate {
-            margin: 12px 0 0; padding: 12px;
-            border: 3px solid #30383f; background: #f1ead7;
-        }
-        .painel-combate .cabecalho { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
-        .painel-combate h2 { font-size: 16px; margin: 0; }
-        .painel-combate .botoes { display: flex; flex-wrap: wrap; gap: 7px; }
-        .painel-combate .botoes .botao { font-size: 12px; padding: 9px 12px; }
-        .mochila-combate {
-            padding: 12px; margin-top: 10px; border: 2px solid #6f8b80;
-            background: #fcfef7;
-        }
-        .mochila-combate[hidden] { display: none; }
-        .mochila-combate .campos { display: flex; flex-wrap: wrap; gap: 12px; margin: 12px 0; }
-        .mochila-combate label { display: flex; flex: 1 1 160px; flex-direction: column; gap: 5px; font-weight: bold; }
-        .mochila-combate select { font: 14px monospace; padding: 9px; border: 2px solid #34483d; max-width: 100%; }
-        .dica-combate { font-size: 12px; margin: 9px 0 0; min-height: 18px; }
-        .dica-combate.com-erro { color: #9f362c; }
-
-        /* Desktop: comandos persistentes na lateral; tela menor: empilhar. */
-        .arena-bloco { display:grid; grid-template-columns:minmax(0,1fr) minmax(236px,290px);
-            grid-template-areas:"inimigo painel" "arena painel" "jogador painel" "registro painel";
-            gap:12px 17px; align-items:start; }
-        .arena-bloco[hidden], [hidden] { display:none !important; }
-        #fila-inimigo { grid-area:inimigo; }
-        #arena { grid-area:arena; }
-        #fila-jogador { grid-area:jogador; }
-        .rodape-arena { grid-area:registro; }
-        #painel-combate { grid-area:painel; margin:0; position:sticky; top:12px;
-            max-height:calc(100vh - 24px); overflow-y:auto; }
-        #painel-combate .cabecalho { display:block; }
-        #painel-combate .botoes { display:grid; grid-template-columns:1fr; margin-top:12px; }
-        #painel-combate .botoes .botao { width:100%; }
-        .mochila-combate .campos { display:grid; grid-template-columns:minmax(0,1fr); }
-        .mochila-combate label { min-width:0; }
-        @media (max-width: 1040px) {
-            .arena-bloco { grid-template-columns:minmax(0,1fr); grid-template-areas:"inimigo" "arena" "jogador" "painel" "registro"; }
-            #painel-combate { position:static; max-height:none; overflow:visible; }
-            #painel-combate .botoes { display:flex; flex-wrap:wrap; }
-            #painel-combate .botoes .botao { width:auto; }
-        }
-        @media (max-width: 800px) {
-            .previa { grid-template-columns: minmax(0, 1fr); }
-            .rodape-arena { grid-template-columns: minmax(0, 1fr); }
-            .controles { flex-direction: row; }
-            .controles .botao { flex: 1; }
-            .arena { min-height: 300px; aspect-ratio: 4 / 3.4; }
-            .placa { font-size: 11px; width: min(52%, 220px); }
-        }
-
-        /* ===== CENA DO CHEFE: Bigolin vira Deoxys Bigolin ===== */
-
-        .retrato-chefe {
-            width: 54px;
-            height: 54px;
-            flex: none;
-            object-fit: cover;
-            border: 2px solid #34383a;
-            border-radius: 50%;
-            background: #000;
-        }
-        .retrato-chefe.dominado { border-color: #7a4cd6; box-shadow: 0 0 10px 2px rgba(150, 100, 255, .7); }
-
-        .cena {
-            position: fixed;
-            inset: 0;
-            z-index: 1000;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 18px;
-            padding: 16px;
-            background: #000;
-            color: #fff;
-            cursor: pointer;
-            overflow: hidden;
-            animation: cena-entra .5s ease-out;
-        }
-        .cena[hidden] { display: none !important; }
-        .cena.saindo { animation: cena-sai .6s ease-in forwards; }
-        @keyframes cena-entra { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes cena-sai { to { opacity: 0; } }
-
-        /* Aura roxa atras do chefe: cresce durante a transformacao. */
-        .cena-aura {
-            position: absolute;
-            left: 50%;
-            top: 42%;
-            width: min(90vw, 620px);
-            aspect-ratio: 1;
-            transform: translate(-50%, -50%) scale(.4);
-            border-radius: 50%;
-            background: radial-gradient(circle, rgba(160, 100, 255, .85) 0%, rgba(90, 60, 200, .35) 40%, transparent 70%);
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 1.4s ease-in, transform 1.8s ease-in;
-        }
-        .cena.carregando .cena-aura { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
-        .cena.dominado .cena-aura { opacity: .75; transform: translate(-50%, -50%) scale(1); transition: opacity 1s, transform 1s; }
-
-        .cena-palco { position: relative; z-index: 1; width: min(78vw, 46vh, 430px); aspect-ratio: 1; }
-        .cena-palco canvas {
-            display: block;
-            width: 100%;
-            height: 100%;
-            image-rendering: pixelated;
-            border: 4px solid #3b3f46;
-            transition: border-color 1s, filter .2s;
-        }
-        .cena.carregando .cena-palco canvas { border-color: #9a6bff; }
-        .cena.carregando .cena-palco { animation: cena-treme .12s linear infinite; }
-        .cena.dominado .cena-palco canvas { border-color: #b08cff; }
-        .cena.dominado .cena-palco { animation: cena-flutua 2.2s ease-in-out infinite; }
-        @keyframes cena-treme {
-            0% { transform: translate(0, 0); } 25% { transform: translate(-4px, 2px); }
-            50% { transform: translate(3px, -3px); } 75% { transform: translate(-2px, -2px); }
-            100% { transform: translate(0, 0); }
-        }
-        @keyframes cena-flutua { 50% { transform: translateY(-10px); } }
-
-        .cena-flash {
-            position: absolute;
-            inset: 0;
-            z-index: 3;
-            background: #fff;
-            opacity: 0;
-            pointer-events: none;
-        }
-        .cena-flash.ativo { animation: cena-flash .7s ease-out; }
-        @keyframes cena-flash { 0% { opacity: 0; } 15% { opacity: 1; } 100% { opacity: 0; } }
-
-        .cena-texto {
-            position: relative;
-            z-index: 2;
-            width: min(92vw, 560px);
-            min-height: 3.4em;
-            padding: 10px 14px;
-            border: 3px solid #292e31;
-            background: #eee9dc;
-            box-shadow: 3px 3px #42484b;
-            color: #20252a;
-            font-size: 15px;
-            line-height: 1.5;
-            text-align: center;
-        }
-        .cena-pular { position: relative; z-index: 2; margin: 0; font-size: 11px; opacity: .6; }
-
-        /* ===== CENA FINAL: Arnaldo derrota o time, Rayquaza aparece e Bigolin e libertado ===== */
-        .cena-final { z-index: 1100; gap: 14px; }
-        .cena-final { padding: 8px; gap: 10px; }
-        .cena-final .cena-palco { width: min(98vw, calc((100vh - 130px) * 16 / 9), 1500px); aspect-ratio: 16 / 9; }
-        .cena-final .cena-palco canvas { background: #000; border-width: 3px; }
-        .cena-final .cena-texto { width: min(96vw, 960px); font-size: clamp(15px, 2vw, 20px); min-height: 2.6em; }
-        .cena-final.treme .cena-palco { animation: cena-treme .12s linear infinite; }
-        .cena-final.raio .cena-palco canvas { border-color: #3ddc97; box-shadow: 0 0 34px 8px rgba(61, 220, 151, .65); }
-        .cena-final.livre .cena-palco canvas { border-color: #ffd54a; box-shadow: 0 0 34px 8px rgba(255, 213, 74, .7); }
-        .cena-final .cena-palco[hidden], .cena-final .cena-texto[hidden], .cena-final .cena-pular[hidden] { display: none; }
-        .final-pular-botao { position: absolute; top: 12px; right: 12px; z-index: 5; }
-        .final-fim {
-            position: relative;
-            z-index: 4;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 10px;
-            width: min(92vw, 520px);
-            padding: 20px 16px;
-            text-align: center;
-            border: 4px solid #ffd54a;
-            background: #14161c;
-            box-shadow: 0 0 40px 6px rgba(255, 213, 74, .35);
-            cursor: default;
-            animation: cena-entra 1.2s ease-out;
-        }
-        .final-fim[hidden] { display: none; }
-        .final-fim img { width: min(52vw, 220px); aspect-ratio: 1; object-fit: contain; image-rendering: pixelated; background: #fff; border: 3px solid #ffd54a; border-radius: 50%; }
-        .final-fim .final-titulo { margin: 0; font-size: clamp(40px, 12vw, 72px); letter-spacing: .12em; color: #ffd54a; text-shadow: 3px 3px #000; }
-        .final-fim .final-jogo { margin: 0; font-size: 13px; letter-spacing: .08em; color: #c9d1d9; }
-        .final-fim .final-msg { margin: 0; font-size: 15px; line-height: 1.5; color: #fff; }
-        .final-fim .botoes { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
-        .arena.treme { animation: cena-treme .12s linear 12; }
-
-        @media (prefers-reduced-motion: reduce) {
-            .cena, .cena.saindo, .cena-flash.ativo { animation-duration: .01s; }
-            .cena.carregando .cena-palco, .cena.dominado .cena-palco { animation: none; }
-            .cena-aura { transition: none; }
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-            .sprite, .flutuante { animation: none !important; }
-            .barra > span, .fila .chip, .sprite.fora { transition: none; }
-        }
-    </style>
-    <link rel="stylesheet" href="assets/peakui.css">
+    <link rel="stylesheet" href="assets/css/batalha.css">
+    <link rel="stylesheet" href="assets/css/peakui.css">
 </head>
 <body>
 
@@ -688,8 +148,8 @@ $imgArnaldo = 'images/pokemon/Armaldo.png';
         <span> | Pokédollars: <strong id="ouro"><?= (int) $perfil['dinheiro'] ?></strong></span>
     </div>
     <div>
-        <a class="botao" href="historico.php">📜 Histórico</a>
-        <a class="botao" id="voltar-mapa" href="mapa.php">⇦ Voltar ao mapa</a>
+        <a class="botao" href="index.php?pagina=historico">📜 Histórico</a>
+        <a class="botao" id="voltar-mapa" href="index.php?pagina=mapa">⇦ Voltar ao mapa</a>
     </div>
 </header>
 
@@ -964,7 +424,7 @@ $imgArnaldo = 'images/pokemon/Armaldo.png';
                 dados.set('para', String(indice + 1));
 
                 try {
-                    const resposta = await fetch('mapa.php', {
+                    const resposta = await fetch('index.php?pagina=mapa', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/x-www-form-urlencoded',
@@ -1398,7 +858,7 @@ $imgArnaldo = 'images/pokemon/Armaldo.png';
                 try {
                     const dados = new URLSearchParams();
                     dados.set('acao', 'reiniciar_perfil');
-                    const resposta = await fetch('mapa.php', {
+                    const resposta = await fetch('index.php?pagina=mapa', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' },
                         body: dados.toString(),
@@ -1675,7 +1135,7 @@ $imgArnaldo = 'images/pokemon/Armaldo.png';
             const botoes = criar('div', 'botoes');
             if (res.resultado === 'VITORIA') {
                 const continuar = criar('a', 'botao principal', 'Continuar');
-                continuar.href = 'mapa.php';
+                continuar.href = 'index.php?pagina=mapa';
                 botoes.appendChild(continuar);
             } else if (res.perfil_reiniciado) {
                 // Sem "tentar de novo": o perfil foi reiniciado, so resta recomecar.
@@ -1686,9 +1146,9 @@ $imgArnaldo = 'images/pokemon/Armaldo.png';
                 if (voltarMapa) voltarMapa.hidden = true;
             } else {
                 const repetir = criar('a', 'botao principal', 'Tentar de novo');
-                repetir.href = 'batalha.php';
+                repetir.href = 'index.php?pagina=batalha';
                 const voltar = criar('a', 'botao', 'Voltar ao mapa');
-                voltar.href = 'mapa.php';
+                voltar.href = 'index.php?pagina=mapa';
                 botoes.append(repetir, voltar);
             }
             caixa.appendChild(botoes);
@@ -1719,7 +1179,7 @@ $imgArnaldo = 'images/pokemon/Armaldo.png';
 
             async function pedir(acao, outros = {}) {
                 const dados = new URLSearchParams({ acao, csrf: DADOS.csrf, ...outros });
-                const resposta = await fetch('batalha.php', {
+                const resposta = await fetch('index.php?pagina=batalha', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' },
                     body: dados.toString()

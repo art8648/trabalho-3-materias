@@ -1,11 +1,17 @@
 <?php
 declare(strict_types=1);
 
+if (!defined('PEAKMON_ROOT')) {
+    http_response_code(404);
+    exit;
+}
+
+
 use Peakmon\Models\Loja;
 
-require_once __DIR__ . '/app/sessao.php';
-require_once __DIR__ . '/app/autoload.php';
-require_once __DIR__ . '/app/Models/Loja.php';
+require_once PEAKMON_ROOT . '/app/sessao.php';
+require_once PEAKMON_ROOT . '/app/autoload.php';
+require_once PEAKMON_ROOT . '/app/Models/Loja.php';
 
 if (!isset($_SESSION['usuario_id'], $_SESSION['perfil_id'])) {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -14,7 +20,7 @@ if (!isset($_SESSION['usuario_id'], $_SESSION['perfil_id'])) {
         echo json_encode(['sucesso' => false, 'mensagem' => 'Sua sessao expirou. Entre novamente.'], JSON_UNESCAPED_UNICODE);
         exit;
     }
-    header('Location: perfis.php');
+    header('Location: index.php?pagina=perfis');
     exit;
 }
 
@@ -26,7 +32,7 @@ if (empty($_SESSION['csrf_loja'])) {
 $csrf = (string) $_SESSION['csrf_loja'];
 
 try {
-    $pdo = require __DIR__ . '/config/database.php';
+    $pdo = require PEAKMON_ROOT . '/config/database.php';
     $controller = new \Peakmon\Controllers\LojaController($pdo);
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         header('Content-Type: application/json; charset=utf-8');
@@ -93,19 +99,14 @@ $rotuloTipo = static function (string $tipo): string {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Loja | Peakmon</title>
-<link rel="stylesheet" href="loja.css?v=<?= (int) @filemtime(__DIR__ . '/loja.css') ?>">
-<style>
-.item-icon { flex: none; width: 36px; height: 36px; display: grid; place-items: center; overflow: hidden; }
-.item-icon img { width: 36px; height: 36px; object-fit: contain; display: block; }
-.detail-icon { overflow: hidden; }
-.detail-icon img { width: 100%; height: 100%; padding: 6px; object-fit: contain; display: block; }
-</style>
+<link rel="stylesheet" href="assets/css/loja.css?v=<?= (int) @filemtime(PEAKMON_ROOT . '/assets/css/loja.css') ?>">
+<link rel="stylesheet" href="assets/css/loja-complemento.css">
 </head>
 <body>
 <div class="shell">
 <header class="topbar">
     <div class="brand"><div class="brand-mark">🛒</div><div><small>PEAKMON · THE BIGOLIN CRISIS</small><h1>Mercado do Treinador</h1></div></div>
-    <a class="back" href="mapa.php">← VOLTAR AO MAPA</a>
+    <a class="back" href="index.php?pagina=mapa">← VOLTAR AO MAPA</a>
 </header>
 <main class="frame">
     <div class="frame-head"><div><div class="eyebrow">SUPRIMENTOS PARA SUA JORNADA</div><h2>Loja</h2></div><div class="wallet">🪙 <span id="saldo"><?= number_format($dinheiro, 0, ',', '.') ?></span> Pokédollars</div></div>
@@ -267,7 +268,7 @@ $rotuloTipo = static function (string $tipo): string {
         botao.disabled = true;
         try {
             const body = new URLSearchParams({acao:'comprar',csrf,id_item:String(selecionado.id),quantidade:String(quantidade)});
-            const resposta = await fetch('loja.php',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body});
+            const resposta = await fetch('index.php?pagina=loja',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body});
             const resultado = await resposta.json();
             if (!resposta.ok || !resultado.sucesso) throw new Error(resultado.mensagem || 'Nao foi possivel concluir a compra.');
             saldoAtual = Number(resultado.dinheiro);

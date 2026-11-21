@@ -208,16 +208,10 @@ O projeto possui controllers para autenticação, perfis, personagens, mapa, bat
 
 As páginas PHP e os arquivos HTML, CSS e JavaScript são responsáveis pela apresentação e interação com o usuário.
 
-Entre as principais páginas estão:
-
-- `login.php`
-- `perfis.php`
-- `selecionar_personagem.php`
-- `mapa.php`
-- `batalha.php`
-- `mochila.php`
-- `loja.php`
-- `historico.php`
+As telas de jogo estão em `views/`, e os endpoints de autenticação, em `auth/`.
+O arquivo `index.php` centraliza as rotas por meio de uma lista de páginas permitidas, sem depender de regras de reescrita do Apache.
+Por exemplo, `index.php?pagina=mapa` acessa a tela do mapa.
+Os estilos e scripts compartilhados estão em `assets/css/` e `assets/js/`.
 
 ## Conceitos de Programação Orientada a Objetos
 
@@ -313,7 +307,7 @@ Abra o painel do XAMPP e ative:
 
 O script de criação e configuração do banco está no arquivo:
 
-`peakmon_base.sql`
+`database/peakmon_base.sql`
 
 Execute esse script em uma instalação de desenvolvimento, utilizando o gerenciador SQL de sua preferência.
 
@@ -339,11 +333,11 @@ Caso o ambiente utilize outras credenciais, atualize o arquivo de configuração
 
 Acesse:
 
-`http://localhost/trabalho-3-materias/menu%20inicial/menu.html`
+`http://localhost/trabalho-3-materias/`
 
 Ou diretamente a tela de login:
 
-`http://localhost/trabalho-3-materias/login.php`
+`http://localhost/trabalho-3-materias/index.php?pagina=login`
 
 Depois, entre em sua conta, escolha um perfil e inicie a aventura.
 
@@ -353,33 +347,49 @@ Depois, entre em sua conta, escolha um perfil e inicie a aventura.
 
 ```text
 trabalho-3-materias/
-│
 ├── app/
 │   ├── Controllers/
 │   ├── Models/
-│   │   ├── Condicoes/
-│   │   └── Pokemons/
 │   ├── Exceptions/
-│   └── autoload.php
-│
+│   ├── autoload.php
+│   ├── iniciar_sessao.php
+│   └── sessao.php
 ├── assets/
+│   ├── css/
+│   └── js/
+├── auth/
+│   ├── auth.php
+│   ├── login.php
+│   └── logout.php
 ├── config/
 │   └── database.php
+├── database/
+│   └── peakmon_base.sql
 ├── images/
+│   ├── extras/
+│   ├── itens/
+│   ├── mapa/
+│   ├── personagens/
+│   └── pokemon/
 ├── menu inicial/
-│
-├── login.php
-├── perfis.php
-├── selecionar_personagem.php
-├── mapa.php
-├── batalha.php
-├── mochila.php
-├── loja.php
-├── historico.php
-│
-├── peakmon_base.sql
+│   ├── images/
+│   ├── login.html
+│   ├── menu.html
+│   └── selecao.html
+├── tests/
+├── views/
+│   ├── batalha.php
+│   ├── historico.php
+│   ├── loja.php
+│   ├── mapa.php
+│   ├── mochila.php
+│   ├── perfis.php
+│   └── selecionar_personagem.php
+├── index.php
 └── README.md
 ```
+
+Os diretórios `images/` e `menu inicial/images/` permanecem nos caminhos originais porque esses caminhos são registrados no banco de dados. Isso permite utilizar a organização nova também com os perfis e o banco existentes.
 
 ## Objetivo acadêmico
 

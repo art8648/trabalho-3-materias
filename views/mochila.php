@@ -1,12 +1,18 @@
 <?php
 declare(strict_types=1);
 
+if (!defined('PEAKMON_ROOT')) {
+    http_response_code(404);
+    exit;
+}
+
+
 use Peakmon\Models\Mochila;
 use Peakmon\Models\Time;
 
-require_once __DIR__ . '/app/sessao.php';
-require_once __DIR__ . '/app/autoload.php';
-require_once __DIR__ . '/app/Models/Mochila.php';
+require_once PEAKMON_ROOT . '/app/sessao.php';
+require_once PEAKMON_ROOT . '/app/autoload.php';
+require_once PEAKMON_ROOT . '/app/Models/Mochila.php';
 
 if (!isset($_SESSION['usuario_id'], $_SESSION['perfil_id'])) {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -15,7 +21,7 @@ if (!isset($_SESSION['usuario_id'], $_SESSION['perfil_id'])) {
         echo json_encode(['sucesso' => false, 'mensagem' => 'Sua sessao expirou. Entre novamente.'], JSON_UNESCAPED_UNICODE);
         exit;
     }
-    header('Location: perfis.php');
+    header('Location: index.php?pagina=perfis');
     exit;
 }
 
@@ -27,7 +33,7 @@ if (empty($_SESSION['csrf_mochila'])) {
 $csrf = (string) $_SESSION['csrf_mochila'];
 
 try {
-    $pdo = require __DIR__ . '/config/database.php';
+    $pdo = require PEAKMON_ROOT . '/config/database.php';
     $controller = new \Peakmon\Controllers\MochilaController($pdo);
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         header('Content-Type: application/json; charset=utf-8');
@@ -108,63 +114,15 @@ $imagemPokemon = static function (array $pokemon) use ($h): string {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Mochila | Peakmon</title>
-<link rel="stylesheet" href="mochila.css?v=<?= (int) @filemtime(__DIR__ . '/mochila.css') ?>">
-<style>
-/* Ícones dos itens (ficam aqui para valer mesmo se o mochila.css estiver em cache) */
-.item-icon { flex: none; width: 48px; height: 48px; display: grid; place-items: center; overflow: hidden; line-height: 1; }
-.item-icon img { width: 48px; height: 48px; object-fit: contain; display: block; }
-
-/* Quadradinho do painel de detalhes: a imagem fica dentro dele */
-.detail-icon { overflow: hidden; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.6); }
-.detail-icon img { width: 100%; height: 100%; padding: 6px; object-fit: contain; display: block; }
-
-/* Cor do painel grande de detalhes por tipo de item (o quadradinho continua branco) */
-
-/* CURA: potions, full restore, revive -> verde */
-.detail.cat-cura { background: linear-gradient(#3fb862, #1d7a3b); box-shadow: 0 0 0 3px #0f3d1f, inset 0 0 0 3px rgba(255, 255, 255, 0.2); }
-.detail.cat-cura .panel-title { background: #0f3d1f; }
-.detail.cat-cura .detail-inner h3 { text-shadow: 2px 2px 0 #0f3d1f; }
-.detail.cat-cura .detail-desc { color: #e9ffee; }
-.detail.cat-cura .field-label { color: #c8f5d3; }
-.detail.cat-cura .detail-icon { border-color: #0f3d1f; }
-
-/* STATUS: antidote, burn heal, ice heal, awakening, paralyze heal, full heal -> azul */
-.detail.cat-status { background: linear-gradient(#3fb4ee, #1d63c4); box-shadow: 0 0 0 3px #0e2a5c, inset 0 0 0 3px rgba(255, 255, 255, 0.2); }
-.detail.cat-status .panel-title { background: #0e2a5c; }
-.detail.cat-status .detail-inner h3 { text-shadow: 2px 2px 0 #0e2a5c; }
-.detail.cat-status .detail-desc { color: #eaf6ff; }
-.detail.cat-status .field-label { color: #cfe9ff; }
-.detail.cat-status .detail-icon { border-color: #0e2a5c; }
-
-/* PEDRA UNIVERSAL -> roxo escuro, mistico e meio sombrio, com brilho pulsando */
-.detail.cat-pedra {
-    background: radial-gradient(circle at 50% 18%, #6a24a8 0%, #2c0f4d 52%, #0c0518 100%);
-    border-color: #b98cff;
-    box-shadow: 0 0 0 3px #12051f, 0 0 22px 4px rgba(150, 70, 255, 0.6), inset 0 0 46px rgba(0, 0, 0, 0.65);
-    animation: pulso-mistico 3.2s ease-in-out infinite;
-}
-.detail.cat-pedra .panel-title { background: #12051f; border-bottom-color: rgba(185, 140, 255, 0.5); }
-.detail.cat-pedra .detail-inner h3 { text-shadow: 0 0 10px #b04cff, 2px 2px 0 #12051f; letter-spacing: 2px; }
-.detail.cat-pedra .detail-desc { color: #e6d3ff; }
-.detail.cat-pedra .field-label { color: #c9a8ff; }
-.detail.cat-pedra .meta-chip { background: rgba(230, 211, 255, 0.92); color: #2c0f4d; }
-.detail.cat-pedra .detail-icon { border-color: #12051f; box-shadow: 0 0 16px 3px rgba(190, 120, 255, 0.85); }
-/* A pedra tem fundo opaco: cobre o quadradinho inteiro, sem margem */
-.detail.cat-pedra .detail-icon img { padding: 0; object-fit: cover; }
-
-@keyframes pulso-mistico {
-    0%, 100% { box-shadow: 0 0 0 3px #12051f, 0 0 16px 2px rgba(150, 70, 255, 0.45), inset 0 0 46px rgba(0, 0, 0, 0.65); }
-    50%      { box-shadow: 0 0 0 3px #12051f, 0 0 32px 8px rgba(176, 76, 255, 0.85), inset 0 0 36px rgba(0, 0, 0, 0.55); }
-}
-@media (prefers-reduced-motion: reduce) { .detail.cat-pedra { animation: none; } }
-</style>
-<link rel="stylesheet" href="assets/peakui.css">
+<link rel="stylesheet" href="assets/css/mochila.css?v=<?= (int) @filemtime(PEAKMON_ROOT . '/assets/css/mochila.css') ?>">
+<link rel="stylesheet" href="assets/css/mochila-complemento.css">
+<link rel="stylesheet" href="assets/css/peakui.css">
 </head>
 <body>
 <div class="shell">
     <header class="topbar">
         <div class="brand"><div class="brand-mark">🎒</div><div><small>PEAKMON · THE BIGOLIN CRISIS</small><h1>Central do Treinador</h1></div></div>
-        <div style="display:flex;flex-wrap:wrap;gap:10px"><a class="back" href="historico.php">📜 HISTÓRICO</a><a class="back" href="mapa.php">← VOLTAR AO MAPA</a></div>
+        <div style="display:flex;flex-wrap:wrap;gap:10px"><a class="back" href="index.php?pagina=historico">📜 HISTÓRICO</a><a class="back" href="index.php?pagina=mapa">← VOLTAR AO MAPA</a></div>
     </header>
 
     <main class="frame">
@@ -282,7 +240,7 @@ $imagemPokemon = static function (array $pokemon) use ($h): string {
     </div>
 </template>
 <template id="modelos-mochila"><div></div><img alt=""><p></p></template>
-<script src="assets/peakui.js"></script>
+<script src="assets/js/peakui.js"></script>
 <script>
 (() => {
     function clonarMochila(tag) {
@@ -310,7 +268,7 @@ $imagemPokemon = static function (array $pokemon) use ($h): string {
     const csrf = <?= json_encode($csrf, JSON_UNESCAPED_UNICODE) ?>;
     const form = async (acao, dados = {}) => {
         const body = new URLSearchParams({acao, csrf, ...dados});
-        const resposta = await fetch('mochila.php', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body});
+        const resposta = await fetch('index.php?pagina=mochila', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body});
         const texto = await resposta.text();
         let resultado;
         try { resultado = JSON.parse(texto); }

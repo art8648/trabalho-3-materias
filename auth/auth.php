@@ -1,10 +1,16 @@
 <?php
 declare(strict_types=1);
 
+if (!defined('PEAKMON_ROOT')) {
+    http_response_code(404);
+    exit;
+}
+
+
 use Peakmon\Controllers\AuthController;
 
-require_once __DIR__ . '/app/iniciar_sessao.php';
-require_once __DIR__ . '/app/autoload.php';
+require_once PEAKMON_ROOT . '/app/iniciar_sessao.php';
+require_once PEAKMON_ROOT . '/app/autoload.php';
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
     http_response_code(405);
@@ -16,7 +22,7 @@ $nome = trim((string) ($_POST['nome'] ?? ''));
 $senhaFormulario = (string) ($_POST['senha'] ?? '');
 
 try {
-    $pdo = require __DIR__ . '/config/database.php';
+    $pdo = require PEAKMON_ROOT . '/config/database.php';
     $auth = new AuthController($pdo);
 
     if ($acao === 'registrar') {
@@ -44,7 +50,7 @@ try {
 if (($resultado['sucesso'] ?? false) === true
     && in_array($acao, ['registrar', 'entrar'], true)) {
 
-    header('Location: perfis.php');
+    header('Location: index.php?pagina=perfis');
     exit;
 }
 
@@ -56,5 +62,5 @@ $_SESSION['aviso_login'] = [
     'nome' => $nome,
 ];
 
-header('Location: login.php');
+header('Location: index.php?pagina=login');
 exit;
