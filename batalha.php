@@ -427,21 +427,45 @@ $imgArnaldo = 'images/pokemon/Armaldo.png';
 
         .rodape-arena { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: start; }
 
+        /* Registro da batalha: um cartao por turno, com uma linha por acao. */
         .registro {
-            height: 132px;
+            height: 200px;
             margin: 0;
-            padding: 8px 10px;
+            padding: 6px;
             overflow-y: auto;
-            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
             font-size: 12px;
-            line-height: 1.55;
+            line-height: 1.45;
             background: #f8f4e8;
             border: 2px solid #34383a;
         }
-        .registro li { padding: 1px 0; }
-        .registro li.entra { color: #385b43; font-weight: bold; }
-        .registro li.desmaia { color: #a84d38; font-weight: bold; }
-        .registro li.fim { font-weight: bold; }
+        .turno-bloco { flex: none; border: 2px solid #34383a; background: #fffdf5; }
+        .turno-titulo {
+            padding: 2px 8px;
+            background: #34383a;
+            color: #f8f4e8;
+            font-size: 11px;
+            font-weight: bold;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+        }
+        .turno-corpo { display: flex; flex-direction: column; }
+        .registro .linha { padding: 3px 8px; border-left: 4px solid transparent; border-bottom: 1px dashed #d9d1ba; }
+        .registro .linha:last-child { border-bottom: 0; }
+        .registro .linha.lado-jogador { border-left-color: #3f7a4f; }
+        .registro .linha.lado-inimigo { border-left-color: #b5533c; }
+        .registro .linha.entra { color: #385b43; font-weight: bold; }
+        .registro .linha.desmaia { color: #a84d38; font-weight: bold; background: #f6e3dd; }
+        .registro .linha.fim { font-weight: bold; background: #efe6c4; }
+        .linha-detalhe { display: flex; flex-wrap: wrap; gap: 3px 6px; margin-top: 2px; }
+        .linha-detalhe span { padding: 0 6px; border: 1px solid #34383a; background: #f2ecd9; font-size: 11px; }
+        .linha-detalhe .dano { background: #f6d3cb; color: #7a2e1c; font-weight: bold; }
+        .linha-detalhe .hp-restante { background: #dbeed6; color: #264a30; }
+        .linha-detalhe .super { background: #ffe58a; font-weight: bold; }
+        .linha-detalhe .fraco { background: #d8dde0; }
+        .linha-detalhe .critico { background: #ffb3a1; font-weight: bold; }
 
         .controles { display: flex; flex-direction: column; gap: 6px; }
         .controles .botao { padding: 7px 12px; font-size: 13px; text-align: center; }
@@ -610,7 +634,10 @@ $imgArnaldo = 'images/pokemon/Armaldo.png';
 
         /* ===== CENA FINAL: Arnaldo derrota o time, Rayquaza aparece e Bigolin e libertado ===== */
         .cena-final { z-index: 1100; gap: 14px; }
-        .cena-final .cena-palco canvas { background: #000; }
+        .cena-final { padding: 8px; gap: 10px; }
+        .cena-final .cena-palco { width: min(98vw, calc((100vh - 130px) * 16 / 9), 1500px); aspect-ratio: 16 / 9; }
+        .cena-final .cena-palco canvas { background: #000; border-width: 3px; }
+        .cena-final .cena-texto { width: min(96vw, 960px); font-size: clamp(15px, 2vw, 20px); min-height: 2.6em; }
         .cena-final.treme .cena-palco { animation: cena-treme .12s linear infinite; }
         .cena-final.raio .cena-palco canvas { border-color: #3ddc97; box-shadow: 0 0 34px 8px rgba(61, 220, 151, .65); }
         .cena-final.livre .cena-palco canvas { border-color: #ffd54a; box-shadow: 0 0 34px 8px rgba(255, 213, 74, .7); }
@@ -720,7 +747,7 @@ $imgArnaldo = 'images/pokemon/Armaldo.png';
             <div class="fila" id="fila-jogador" aria-label="Seu time"></div>
 
             <div class="rodape-arena">
-                <ul class="registro" id="registro" aria-live="polite" aria-label="Registro da batalha"></ul>
+                <div class="registro" id="registro" role="log" aria-live="polite" aria-label="Registro da batalha"></div>
                 <div class="controles">
                     <button type="button" class="botao" data-velocidade="1" aria-pressed="true">1x</button>
                     <button type="button" class="botao" data-velocidade="2" aria-pressed="false">2x</button>
@@ -772,7 +799,7 @@ $imgArnaldo = 'images/pokemon/Armaldo.png';
     <!-- Cena final: so aparece quando o Arnaldo (ultimo slot do Bigolin) entra em campo -->
     <div class="cena cena-final" id="cena-final" hidden role="dialog" aria-label="Final do jogo">
         <button type="button" class="botao final-pular-botao" id="final-pular">Pular ⏭</button>
-        <div class="cena-palco" id="final-palco"><canvas id="final-canvas" width="512" height="512"></canvas></div>
+        <div class="cena-palco" id="final-palco"><canvas id="final-canvas" width="1280" height="720"></canvas></div>
         <div class="cena-texto" id="final-texto" aria-live="polite"></div>
         <p class="cena-pular" id="final-dica">Clique para avançar</p>
         <div class="cena-flash" id="final-flash"></div>
@@ -782,7 +809,7 @@ $imgArnaldo = 'images/pokemon/Armaldo.png';
             <p class="final-jogo">PEAKMON: THE BIGOLIN CRISIS</p>
             <p class="final-msg">Rayquaza derrotou Arnaldo e Bigolin foi libertado do controle de Deoxys. Obrigado por jogar!</p>
             <div class="botoes">
-                <a class="botao principal" href="mapa.php">Voltar ao mapa</a>
+                <button type="button" class="botao principal" id="final-jogar-novamente">Jogar novamente</button>
                 <a class="botao" href="menu%20inicial/menu.html">Menu inicial</a>
             </div>
         </div>
@@ -985,6 +1012,8 @@ $imgArnaldo = 'images/pokemon/Armaldo.png';
             const placa = { jogador: $('placa-jogador'), inimigo: $('placa-inimigo') };
             const fila = { jogador: $('fila-jogador'), inimigo: $('fila-inimigo') };
             const registro = $('registro');
+            let turnoAtual = null;  // turno do cartao aberto no registro
+            let corpoAtual = null;  // corpo do cartao do turno atual
             const arena = $('arena');
 
             let times = { jogador: [], inimigo: [] };
@@ -1065,9 +1094,54 @@ $imgArnaldo = 'images/pokemon/Armaldo.png';
                 setTimeout(() => el.remove(), 1000);
             }
 
+            // Abre (ou reaproveita) o cartao do turno; o turno 0 e a abertura da luta.
+            function corpoDoTurno(turno) {
+                if (corpoAtual && turnoAtual === turno) return corpoAtual;
+                const bloco = criar('div', 'turno-bloco');
+                bloco.appendChild(criar('div', 'turno-titulo', turno > 0 ? 'Turno ' + turno : 'Início da batalha'));
+                const corpo = criar('div', 'turno-corpo');
+                bloco.appendChild(corpo);
+                registro.appendChild(bloco);
+                turnoAtual = turno;
+                corpoAtual = corpo;
+                return corpo;
+            }
+
+            // Linha de ataque: quem usou o que, quanto de vida o alvo perdeu e quanto sobrou.
+            function linhaDeAtaque(ev) {
+                const ladoAlvo = ev.lado === 'jogador' ? 'inimigo' : 'jogador';
+                const atacante = times[ev.lado][ev.i];
+                const alvo = times[ladoAlvo][ev.alvo];
+                const nomeAlvo = alvo ? alvo.nome : 'o alvo';
+
+                const linha = criar('div', 'linha ataque lado-' + ev.lado);
+                const topo = criar('div', 'linha-topo');
+                topo.appendChild(criar('strong', '', atacante ? atacante.nome : 'Pokémon'));
+                topo.appendChild(criar('span', '', ' usou '));
+                topo.appendChild(criar('em', '', ev.golpe || 'um golpe'));
+                linha.appendChild(topo);
+
+                const detalhe = criar('div', 'linha-detalhe');
+                if (ev.efetividade <= 0) {
+                    detalhe.appendChild(criar('span', 'fraco', 'Não afeta ' + nomeAlvo));
+                } else {
+                    detalhe.appendChild(criar('span', 'dano', nomeAlvo + ' perdeu ' + ev.dano + ' HP'));
+                    detalhe.appendChild(criar('span', 'hp-restante', 'HP ' + ev.hp_alvo + '/' + ev.hp_max_alvo));
+                    if (ev.efetividade > 1) detalhe.appendChild(criar('span', 'super', 'Super efetivo!'));
+                    else if (ev.efetividade < 1) detalhe.appendChild(criar('span', 'fraco', 'Pouco efetivo'));
+                    if (ev.critico) detalhe.appendChild(criar('span', 'critico', 'Golpe crítico!'));
+                }
+                linha.appendChild(detalhe);
+                return linha;
+            }
+
             function registrar(ev) {
-                const li = criar('li', ev.tipo, ev.msg);
-                registro.appendChild(li);
+                const turno = Number.isFinite(ev.turno) ? ev.turno : (turnoAtual ?? 0);
+                const corpo = corpoDoTurno(turno);
+                const linha = ev.tipo === 'ataque'
+                    ? linhaDeAtaque(ev)
+                    : criar('div', 'linha ' + ev.tipo + (ev.lado ? ' lado-' + ev.lado : ''), ev.msg);
+                corpo.appendChild(linha);
                 registro.scrollTop = registro.scrollHeight;
             }
 
@@ -1110,6 +1184,8 @@ $imgArnaldo = 'images/pokemon/Armaldo.png';
                     inimigo: res.inimigo.map((l) => l.hp)
                 };
                 registro.textContent = '';
+                turnoAtual = null;
+                corpoAtual = null;
                 $('fase-previa').hidden = true;
                 $('fase-arena').hidden = false;
                 sprite.jogador.classList.add('fora');
@@ -1296,7 +1372,7 @@ $imgArnaldo = 'images/pokemon/Armaldo.png';
             return { aplicavel: true, tocar };
         })();
 
-        // ---------- cena final: Rayquaza derrota o Arnaldo e o Bigolin e libertado ----------
+        // ---------- cena final: Rayquaza corta o Arnaldo e o Bigolin e libertado ----------
         const CenaFinal = (function () {
             const cena = $('cena-final');
             // Fora do chefe Bigolin a cena nao existe e nada acontece.
@@ -1311,9 +1387,32 @@ $imgArnaldo = 'images/pokemon/Armaldo.png';
             const dica = $('final-dica');
             const flash = $('final-flash');
             const cartaoFim = $('final-fim');
-            const T = canvas.width;
+            const W = canvas.width;   // 1280
+            const H = canvas.height;  // 720
 
-            let avancar = null;   // encerra a espera/animacao atual (clique, Enter ou Espaco)
+            // "Jogar novamente": reinicia o perfil (mesma acao do botao do mapa) e volta para a selecao de personagem.
+            const botaoNovamente = $('final-jogar-novamente');
+            botaoNovamente.addEventListener('click', async () => {
+                botaoNovamente.disabled = true;
+                botaoNovamente.textContent = 'Reiniciando...';
+                try {
+                    const dados = new URLSearchParams();
+                    dados.set('acao', 'reiniciar_perfil');
+                    const resposta = await fetch('mapa.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' },
+                        body: dados.toString(),
+                    });
+                    const resultado = await resposta.json();
+                    if (!resposta.ok || !resultado.sucesso) throw new Error(resultado.mensagem || 'Falha ao reiniciar.');
+                    window.location.href = resultado.redirecionar;
+                } catch (erro) {
+                    botaoNovamente.disabled = false;
+                    botaoNovamente.textContent = 'Erro ao reiniciar. Tentar de novo';
+                }
+            });
+
+            let avancar = null;    // encerra a espera/animacao atual (clique, Enter ou Espaco)
             let pularTudo = false; // botao "Pular" ou Esc: vai direto para a tela de fim
 
             const carregar = (img) => new Promise((resolve) => {
@@ -1325,6 +1424,7 @@ $imgArnaldo = 'images/pokemon/Armaldo.png';
             const fala = (texto) => { caixaTexto.textContent = texto; };
             const facil = (t) => t * t;
             const suave = (t) => 1 - (1 - t) * (1 - t);
+            const lim = (v) => Math.max(0, Math.min(1, v));
 
             // Espera um tempo, mas um clique (ou Enter/Espaco) adianta para a proxima parte.
             const esperar = (ms) => new Promise((ok) => {
@@ -1350,24 +1450,78 @@ $imgArnaldo = 'images/pokemon/Armaldo.png';
             });
 
             const brilhar = () => { flash.classList.remove('ativo'); void flash.offsetWidth; flash.classList.add('ativo'); };
-            const fundo = (cor) => { ctx.fillStyle = cor; ctx.fillRect(0, 0, T, T); };
+            const fundo = (cor) => { ctx.fillStyle = cor; ctx.fillRect(0, 0, W, H); };
+            const ceu = () => {
+                const g = ctx.createLinearGradient(0, 0, 0, H);
+                g.addColorStop(0, '#04101f'); g.addColorStop(1, '#1a0f2e');
+                ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+            };
             const figura = (img, x, y, w, h, alpha = 1) => {
                 ctx.save();
-                ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+                ctx.globalAlpha = lim(alpha);
                 ctx.imageSmoothingEnabled = false;
                 ctx.drawImage(img, x, y, w, h);
                 ctx.restore();
             };
-            // Desenha a imagem "pixelada" (bloco maior = mais quadradona), sobre fundo branco.
+
+            // Posicoes: Arnaldo a direita, Rayquaza a esquerda.
+            const TA = H * 0.62;                 // tamanho do Arnaldo
+            const AX = W * 0.60, AY = H * 0.34;  // canto do Arnaldo
+            const CX = AX + TA / 2, CY = AY + TA / 2; // centro do Arnaldo
+            const TR = H * 1.0;                  // tamanho do Rayquaza
+            const RX = -W * 0.02;                // x inicial do Rayquaza
+            const RY_FIM = -H * 0.04;            // y quando ja desceu
+
+            // Arnaldo cortado na diagonal (de cima-direita para baixo-esquerda).
+            // "sep" afasta as duas metades; "alpha" some com elas.
+            function arnaldoCortado(img, sep, alpha) {
+                const dx = -0.7071, dy = 0.7071;   // direcao do corte
+                const nx = 0.7071, ny = 0.7071;    // normal ao corte
+                const L = 2000;
+                [-1, 1].forEach((lado) => {
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.moveTo(CX + dx * L, CY + dy * L);
+                    ctx.lineTo(CX - dx * L, CY - dy * L);
+                    ctx.lineTo(CX - dx * L + nx * L * lado, CY - dy * L + ny * L * lado);
+                    ctx.lineTo(CX + dx * L + nx * L * lado, CY + dy * L + ny * L * lado);
+                    ctx.closePath();
+                    ctx.clip();
+                    ctx.globalAlpha = lim(alpha);
+                    ctx.imageSmoothingEnabled = false;
+                    ctx.drawImage(img, AX + nx * sep * lado, AY + ny * sep * lado, TA, TA);
+                    ctx.restore();
+                });
+            }
+
+            // Risco de espada: cresce da ponta superior-direita ate a inferior-esquerda.
+            function riscoDeEspada(progresso, brilho) {
+                if (progresso <= 0) return;
+                const x0 = CX + TA * 0.75, y0 = CY - TA * 0.75;
+                const x1 = CX - TA * 0.75, y1 = CY + TA * 0.75;
+                const xf = x0 + (x1 - x0) * lim(progresso), yf = y0 + (y1 - y0) * lim(progresso);
+                ctx.save();
+                ctx.lineCap = 'round';
+                ctx.globalAlpha = lim(brilho);
+                ctx.shadowColor = '#3ddc97'; ctx.shadowBlur = 40;
+                ctx.strokeStyle = '#d9fff0'; ctx.lineWidth = 12;
+                ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(xf, yf); ctx.stroke();
+                ctx.shadowBlur = 0; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 4;
+                ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(xf, yf); ctx.stroke();
+                ctx.restore();
+            }
+
+            // Desenha a imagem quadrada "pixelada" no centro, sobre fundo branco.
             const pixelada = (img, bloco) => {
                 fundo('#ffffff');
+                const x = (W - H) / 2;
                 ctx.imageSmoothingEnabled = false;
-                if (bloco <= 1) { ctx.drawImage(img, 0, 0, T, T); return; }
-                const n = Math.max(2, Math.round(T / bloco));
+                if (bloco <= 1) { ctx.drawImage(img, x, 0, H, H); return; }
+                const n = Math.max(2, Math.round(H / bloco));
                 mini.width = n; mini.height = n;
                 miniCtx.imageSmoothingEnabled = true;
                 miniCtx.drawImage(img, 0, 0, n, n);
-                ctx.drawImage(mini, 0, 0, n, n, 0, 0, T, T);
+                ctx.drawImage(mini, 0, 0, n, n, x, 0, H, H);
             };
 
             async function tocar() {
@@ -1394,45 +1548,49 @@ $imgArnaldo = 'images/pokemon/Armaldo.png';
                 try {
                     // Sem as imagens nao ha o que animar: vai direto para a tela de fim.
                     if (arnaldo && rayquaza && deoxys && bom) {
-                        const fundoCeu = '#10091c';
-                        const tR = T * 0.95; // tamanho do Rayquaza no quadro
-
-                        // 1) Arnaldo domina o campo.
+                        // 1) Arnaldo domina o campo (a direita).
                         fala('Arnaldo, o deus do universo, derrotou todos os seus Pokémon com um único gesto...');
                         await animar(1200, (t) => {
-                            fundo(fundoCeu);
-                            figura(arnaldo, T * 0.18, T * 0.22, T * 0.64, T * 0.64, suave(t));
+                            ceu();
+                            figura(arnaldo, AX, AY, TA, TA, suave(t));
                         });
                         await esperar(2600);
                         if (!pularTudo) { fala('Tudo parecia perdido...'); await esperar(2000); }
 
-                        // 2) Rugido nos ceus: Rayquaza desce.
+                        // 2) Rugido nos ceus: Rayquaza desce pela esquerda.
                         if (!pularTudo) {
                             fala('Então um rugido ecoou pelos céus... É o RAYQUAZA!');
                             cena.classList.add('treme', 'raio');
                             brilhar();
                             await animar(2200, (t) => {
-                                fundo('#06162a');
-                                figura(arnaldo, T * 0.08, T * 0.5, T * 0.4, T * 0.4);
-                                figura(rayquaza, T * 0.05, -tR + (tR * 0.95) * suave(t), tR, tR);
+                                ceu();
+                                figura(arnaldo, AX, AY, TA, TA);
+                                figura(rayquaza, RX, -TR + (RY_FIM + TR) * suave(t), TR, TR);
                             });
                             cena.classList.remove('treme');
                             await esperar(1500);
                         }
 
-                        // 3) Golpe unico: Arnaldo desaparece.
+                        // 3) Investida e corte de espada: Arnaldo e partido ao meio.
                         if (!pularTudo) {
-                            fala('Rayquaza derrotou Arnaldo com um único golpe!');
-                            brilhar();
-                            cena.classList.add('treme');
-                            await animar(1600, (t) => {
-                                fundo('#06162a');
-                                const tremor = Math.sin(t * 60) * 7 * (1 - t);
-                                figura(arnaldo, T * 0.08 + tremor, T * 0.5, T * 0.4, T * 0.4, 1 - facil(t));
-                                figura(rayquaza, T * 0.05 + t * 14, -tR * 0.05 + t * 26, tR, tR);
+                            fala('Rayquaza avançou como um espadachim... e cortou Arnaldo ao meio!');
+                            await animar(2600, (t) => {
+                                ceu();
+                                // 0-0.30: investida | 0.30-0.45: risco | 0.45-1: metades se afastam
+                                const investida = suave(lim(t / 0.30));
+                                const rx = RX + investida * W * 0.30;
+                                const ry = RY_FIM + investida * H * 0.06;
+                                const risco = lim((t - 0.30) / 0.15);
+                                const abre = lim((t - 0.45) / 0.55);
+                                if (t < 0.45) figura(arnaldo, AX, AY, TA, TA);
+                                else arnaldoCortado(arnaldo, abre * 90, 1 - facil(abre));
+                                figura(rayquaza, rx, ry, TR, TR);
+                                riscoDeEspada(risco, 1 - abre);
+                                if (t >= 0.30 && !canvas._cortou) { canvas._cortou = true; brilhar(); cena.classList.add('treme'); }
                             });
+                            canvas._cortou = false;
                             cena.classList.remove('treme');
-                            await esperar(1600);
+                            await esperar(1800);
                         }
 
                         // 4) Rayquaza volta aos ceus.
@@ -1440,8 +1598,8 @@ $imgArnaldo = 'images/pokemon/Armaldo.png';
                             cena.classList.remove('raio');
                             fala('Rayquaza voltou aos céus... e algo mudou em Bigolin!');
                             await animar(1400, (t) => {
-                                fundo('#06162a');
-                                figura(rayquaza, T * 0.05 + 14, -tR * 0.05 + 26 - (tR * 1.1) * suave(t), tR, tR, 1 - t);
+                                ceu();
+                                figura(rayquaza, RX + W * 0.30, RY_FIM + H * 0.06 - (TR * 1.1) * suave(t), TR, TR, 1 - t);
                             });
                             await esperar(900);
                         }
@@ -1475,7 +1633,7 @@ $imgArnaldo = 'images/pokemon/Armaldo.png';
                     $('final-pular').hidden = true;
                     palco.hidden = true; caixaTexto.hidden = true; dica.hidden = true;
                     cartaoFim.hidden = false;
-                    const primeiro = cartaoFim.querySelector('a');
+                    const primeiro = cartaoFim.querySelector('button, a');
                     if (primeiro) primeiro.focus();
                 }
             }
