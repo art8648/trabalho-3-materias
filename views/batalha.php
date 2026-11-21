@@ -1036,7 +1036,7 @@ $imgArnaldo = 'images/pokemon/Armaldo.png';
 
                         // 3) Investida e corte de espada: Arnaldo e partido ao meio.
                         if (!pularTudo) {
-                            fala('Rayquaza avançou como um espadachim... e cortou Arnaldo ao meio!');
+                            fala('Rayquaza avança e oblitera Arnaldo como se não fosse nada!');
                             await animar(2600, (t) => {
                                 ceu();
                                 // 0-0.30: investida | 0.30-0.45: risco | 0.45-1: metades se afastam
