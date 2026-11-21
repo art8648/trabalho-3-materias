@@ -39,19 +39,57 @@
     body {
         min-height: 100vh;
         padding: 35px 16px;
+        /* Meio roxo (espacial/misterioso) no lugar do ciano; cobre os dois blocos de login e cadastro. */
         background: linear-gradient(
             90deg,
-            rgba(26, 92, 143, 1) 0%,
-            rgba(46, 166, 134, 1) 33%,
-            rgba(34, 181, 139, 1) 50%,
-            rgba(51, 181, 81, 1) 64%,
-            rgba(63, 163, 41, 1) 100%
+            rgb(26, 92, 143) 0%,
+            rgb(106, 63, 168) 27%,
+            rgb(106, 63, 168) 73%,
+            rgb(45, 150, 110) 87%,
+            rgb(63, 163, 41) 100%
         );
         font-family: monospace;
         color: var(--texto-claro);
         display: flex;
         justify-content: center;
         align-items: center;
+    }
+
+    /* Camada 1: o degrade roxo + brilho central + estrelinhas. */
+    body::before,
+    body::after {
+        content: '';
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        pointer-events: none;
+    }
+    body::before {
+        background:
+            radial-gradient(1.5px 1.5px at 12% 18%, rgba(255, 255, 255, .7), transparent),
+            radial-gradient(1px 1px at 24% 72%, rgba(255, 255, 255, .55), transparent),
+            radial-gradient(1.5px 1.5px at 33% 40%, rgba(255, 255, 255, .6), transparent),
+            radial-gradient(1px 1px at 41% 12%, rgba(255, 255, 255, .6), transparent),
+            radial-gradient(1.5px 1.5px at 58% 88%, rgba(255, 255, 255, .55), transparent),
+            radial-gradient(1px 1px at 66% 26%, rgba(255, 255, 255, .65), transparent),
+            radial-gradient(1.5px 1.5px at 74% 62%, rgba(255, 255, 255, .5), transparent),
+            radial-gradient(1px 1px at 81% 14%, rgba(255, 255, 255, .45), transparent),
+            radial-gradient(ellipse 38% 70% at 50% 50%, rgba(170, 120, 240, .30), transparent 70%),
+            linear-gradient(
+                90deg,
+                rgb(26, 92, 143) 0%,
+                rgb(106, 63, 168) 27%,
+                rgb(106, 63, 168) 73%,
+                rgb(45, 150, 110) 87%,
+                rgb(63, 163, 41) 100%
+            );
+    }
+    /* Camada 2: Bigolin controlado pelo Deoxys, bem escuro e apagado (multiply: o branco some, so o desenho escurece o roxo). */
+    body::after {
+        background: url('menu%20inicial/images/deoxys_bigolin.jpg') center / auto 112vh no-repeat;
+        mix-blend-mode: multiply;
+        filter: grayscale(1) contrast(1.6) blur(1.2px);
+        opacity: .4;
     }
 
     main {
@@ -320,7 +358,7 @@
 
         </section>
         </div>
-
+        
     </main>
 </body>
 </html>
