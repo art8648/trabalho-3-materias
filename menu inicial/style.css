@@ -76,3 +76,63 @@ body {
     color: #17252d;
     transform: scale(1.08);
 }
+
+/* ===== Meteoro caido no meio da tela (so CSS, sem JavaScript) ===== */
+/* A cena fica centralizada; o botao Jogar (z-index 10) continua por cima. */
+.meteoro-cena {
+    position: absolute;
+    left: 50%;
+    top: 87%;
+    height: 42vh;
+    aspect-ratio: 809 / 688;
+    transform: translate(-50%, -50%);
+    z-index: 5;
+    pointer-events: none;
+}
+
+/* Meteoro parado no chao, no meio da tela. */
+.meteoro-voo {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+.meteoro {
+    position: relative;
+    display: block;
+    width: 100%;
+    height: 100%;
+    opacity: 0.7; /* mesma translucidez do Rayquaza e do Armaldo */
+}
+
+/* Fumaca subindo do meteoro caido (6 baforadas em loop, cada uma com atraso e desvio proprios). */
+.fumaca {
+    position: absolute;
+    top: 20%;
+    left: calc(50% + var(--l, 0%));
+    width: 13%;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: radial-gradient(circle,
+        rgba(215, 205, 240, 0.55) 0%,
+        rgba(140, 120, 190, 0.3) 50%,
+        transparent 72%);
+    filter: blur(7px);
+    opacity: 0;
+    animation: meteoro-fumaca 5.5s ease-out calc(0.3s + var(--d, 0s)) infinite backwards;
+}
+.fumaca.f1 { --l: -6%; --x: -6vw;  --d: 0s; }
+.fumaca.f2 { --l: 4%; --x:  5vw;  --d: 0.9s; }
+.fumaca.f3 { --l: -1%; --x: -2vw;  --d: 1.8s; }
+.fumaca.f4 { --l: 7%; --x:  8vw;  --d: 2.7s; }
+.fumaca.f5 { --l: -4%; --x: -9vw;  --d: 3.6s; }
+.fumaca.f6 { --l: 2%; --x:  2vw;  --d: 4.5s; }
+@keyframes meteoro-fumaca {
+    0%   { transform: translate(-50%, 0) scale(0.35); opacity: 0; }
+    12%  { opacity: 0.75; }
+    100% { transform: translate(calc(-50% + var(--x, 0px)), -38vh) scale(2.4); opacity: 0; }
+}
+
+/* Quem prefere menos movimento ve o meteoro sem fumaca. */
+@media (prefers-reduced-motion: reduce) {
+    .fumaca { display: none; }
+}
