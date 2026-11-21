@@ -223,9 +223,9 @@ $imagemPokemon = static function (array $pokemon) use ($h): string {
                         </div>
                         <div id="acao-evolucao" class="<?= $itens[0]['tipo_efeito'] === 'PEDRA_EVOLUCAO' ? '' : 'hidden' ?>">
                             <label class="field-label" for="pokemon-evoluir">ESCOLHA O POKEMON</label>
-                            <select class="field" id="pokemon-evoluir"><option value="">Selecione um Pokemon</option><?php foreach ($todosPokemon as $pokemon): ?><option value="<?= (int) $pokemon['id_capturado'] ?>" data-imagem="<?= $h($pokemon['imagem'] ?? '') ?>"><?= $h($pokemon['nome']) ?><?= ($pokemon['sexo'] ?? '') === 'F' ? ' ♀' : (($pokemon['sexo'] ?? '') === 'M' ? ' ♂' : '') ?></option><?php endforeach; ?></select>
+                            <select class="field" id="pokemon-evoluir" autocomplete="off"><option value="">Selecione um Pokemon</option><?php foreach ($todosPokemon as $pokemon): ?><option value="<?= (int) $pokemon['id_capturado'] ?>" data-imagem="<?= $h($pokemon['imagem'] ?? '') ?>"><?= $h($pokemon['nome']) ?><?= ($pokemon['sexo'] ?? '') === 'F' ? ' ♀' : (($pokemon['sexo'] ?? '') === 'M' ? ' ♂' : '') ?></option><?php endforeach; ?></select>
                             <label class="field-label" for="destino-evolucao" style="margin-top:10px">EVOLUCAO DISPONIVEL</label>
-                            <select class="field" id="destino-evolucao" disabled><option value="">Primeiro selecione um Pokemon</option></select>
+                            <select class="field" id="destino-evolucao" autocomplete="off" disabled><option value="">Primeiro selecione um Pokemon</option></select>
                             <button class="primary" id="botao-evoluir" type="button" style="width:100%;margin-top:10px" disabled>USAR PEDRA UNIVERSAL</button>
                         </div>
                     <?php else: ?>
@@ -330,6 +330,7 @@ $imagemPokemon = static function (array $pokemon) use ($h): string {
     const categorias = {CURA_HP:'Cura',CURA_TOTAL:'Cura',REVIVER:'Cura',CURA_STATUS:'Status',PEDRA_EVOLUCAO:'Evolucao'};
     const classesCor = {CURA_HP:'cat-cura',CURA_TOTAL:'cat-cura',REVIVER:'cat-cura',CURA_STATUS:'cat-status',PEDRA_EVOLUCAO:'cat-pedra'};
     let itemSelecionado = null;
+    let consultaEvolucao = 0; // numero do pedido mais recente de evolucoes (descarta respostas velhas)
     const cards = [...document.querySelectorAll('.item-card')];
     const botaoUsar = document.getElementById('botao-usar');
     const botaoEvoluir = document.getElementById('botao-evoluir');
@@ -360,7 +361,7 @@ $imagemPokemon = static function (array $pokemon) use ($h): string {
         const pedra = itemSelecionado.tipo === 'PEDRA_EVOLUCAO';
         acaoNormal.classList.toggle('hidden', pedra);
         acaoEvolucao.classList.toggle('hidden', !pedra);
-        if (pedra) resetarEvolucoes();
+        if (pedra) carregarEvolucoes();
     }
     cards.forEach(card => card.addEventListener('click', () => selecionarItem(card)));
     const cardSalvo = cards.find(c => c.dataset.id === String(preferencias.item));
@@ -445,26 +446,38 @@ $imagemPokemon = static function (array $pokemon) use ($h): string {
         destino.innerHTML = '<option value="">Primeiro selecione um Pokemon</option>';
         destino.disabled = true; botaoEvoluir.disabled = true;
     }
-    let consultaEvolucao = 0;
-    document.getElementById('pokemon-evoluir')?.addEventListener('change', async e => {
+    // Carrega as evolucoes do Pokemon escolhido. E chamada ao trocar de Pokemon, ao voltar para a Pedra
+    // e ao recarregar a pagina (por ex. depois de evoluir). Separa "nenhuma evolucao" de "falha ao consultar":
+    // se a consulta falhar, tenta de novo sozinha em vez de deixar a lista parecendo vazia.
+    async function carregarEvolucoes(tentativa = 0) {
         const meuPedido = ++consultaEvolucao;
-        const capturado = e.target.value;
+        const selectPokemon = document.getElementById('pokemon-evoluir');
+        const capturado = selectPokemon ? selectPokemon.value : '';
         resetarEvolucoes();
         if (!capturado) return;
+        const destino = document.getElementById('destino-evolucao');
+        destino.innerHTML = '<option value="">Carregando evolucoes...</option>';
         try {
             const r = await form('listar_evolucoes', {id_capturado:capturado});
-            // Evita que a resposta de outro Pokemon sobrescreva as evolucoes atuais.
-            if (meuPedido !== consultaEvolucao ||
-                document.getElementById('pokemon-evoluir').value !== capturado) return;
-            const destino = document.getElementById('destino-evolucao');
-            destino.innerHTML = '';
+            // Evita que a resposta de outro Pokemon (ou de um pedido antigo) sobrescreva a lista atual.
+            if (meuPedido !== consultaEvolucao || selectPokemon.value !== capturado) return;
             if (!r.evolucoes.length) { destino.innerHTML = '<option value="">Nenhuma evolucao disponivel</option>'; return; }
             destino.innerHTML = '<option value="">Selecione a evolucao</option>' + r.evolucoes.map(p => `<option value="${Number(p.id_destino)}" data-imagem="${String(p.imagem_destino || '').replace(/"/g, '&quot;')}">${String(p.pokemon_destino).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}</option>`).join('');
             destino.disabled = false;
-        } catch (e2) { if (meuPedido === consultaEvolucao) toast(e2.message, true); }
-    });
+        } catch (e2) {
+            if (meuPedido !== consultaEvolucao) return;
+            if (tentativa < 2) {
+                setTimeout(() => { if (meuPedido === consultaEvolucao) carregarEvolucoes(tentativa + 1); }, 600);
+                return;
+            }
+            destino.innerHTML = '<option value="">Falha ao carregar. Escolha o Pokemon de novo.</option>';
+            toast(e2.message, true);
+        }
+    }
+    document.getElementById('pokemon-evoluir')?.addEventListener('change', () => carregarEvolucoes());
     document.getElementById('destino-evolucao')?.addEventListener('change', e => { botaoEvoluir.disabled = !e.target.value; });
-    if (itemSelecionado?.tipo === 'PEDRA_EVOLUCAO' && alvoEvolucao?.value) alvoEvolucao.dispatchEvent(new Event('change'));
+    // Depois de restaurar o Pokemon salvo, busca as evolucoes dele (cobre o recarregamento apos evoluir).
+    if (itemSelecionado?.tipo === 'PEDRA_EVOLUCAO' && alvoEvolucao?.value) carregarEvolucoes();
     // ===== Animacao de evolucao (rapida: termina em ~4,6 s; clicar encerra na hora) =====
     function animarEvolucao(de, para) {
         return new Promise((resolver) => {
