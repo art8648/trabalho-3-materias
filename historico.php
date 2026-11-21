@@ -43,6 +43,7 @@ $rotulos = [
     'CENTRO_POKEMON' => 'Centro Pokémon',
     'AREA_CONCLUIDA' => 'Área concluída',
     'PERFIL_REINICIADO' => 'Perfil reiniciado',
+    'JOGO_CONCLUIDO' => 'Fim de jogo',
     'BATALHA_ARQUIVADA' => 'Batalha da jornada anterior',
 ];
 ?>

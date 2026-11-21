@@ -137,10 +137,10 @@ $miniIcone = static function (string $arquivo, string $emoji, string $classe = '
         ? '<img class="' . $classe . '" src="' . htmlspecialchars($src, ENT_QUOTES, 'UTF-8') . '" alt="" draggable="false">'
         : $emoji;
 };
-// Imagem do chefe no mapa: Bigolin (area 2) aparece como Deoxys Bigolin; os demais usam o Hiago.
+// Imagem do chefe no mapa: Bigolin (area 2) aparece como o Bigolin do mal (sem o Deoxys); os demais usam o Hiago.
 $imagemDoChefe = static function (?string $chefeNome): string {
     return $chefeNome === 'Bigolin'
-        ? 'menu%20inicial/images/deoxys_bigolin.jpg'
+        ? 'menu%20inicial/images/bigolin.jpg'
         : 'images/mapa/hiago.png';
 };
 $iconeNoHtml = static function (string $tipo, string $codigo = '', ?string $chefeNome = null) use ($iconePorTipo, $miniIcone, $imagemDoChefe): string {
@@ -154,7 +154,7 @@ $iconeNoHtml = static function (string $tipo, string $codigo = '', ?string $chef
         };
         return '<img class="no-pixel-icon" src="images/mapa/' . $nomeArquivo . '.svg" alt="" draggable="false">';
     }
-    // Chefe final: imagem do chefe da area (Hiago ou Deoxys Bigolin), maior que os demais pontos.
+    // Chefe final: imagem do chefe da area (Hiago ou Bigolin do mal), maior que os demais pontos.
     if ($tipo === 'CHEFE') {
         $classeChefe = $chefeNome === 'Bigolin' ? 'no-chefe no-chefe-bigolin' : 'no-chefe';
         return '<img class="no-pixel-icon ' . $classeChefe . '" src="' . $imagemDoChefe($chefeNome) . '" alt="" draggable="false">';
@@ -1599,10 +1599,10 @@ $corPorTipo = static function (string $tipo): string {
         .no-pixel-icon { display:block; width:42px; height:42px; image-rendering:pixelated; filter:drop-shadow(1px 2px 0 #21343e); }
         .no { font-size:33px; }
         .no-chefe { width:60px; height:60px; filter:drop-shadow(1px 2px 0 #21343e); }
-        /* Deoxys Bigolin: foto quadrada em fundo preto, entao vira medalhao redondo com brilho roxo. */
-        .no-chefe-bigolin { border-radius:50%; object-fit:cover; image-rendering:auto; border:3px solid #b08cff;
-            box-shadow:0 0 10px 2px rgba(176,140,255,.75); animation:chefe-pulsa 1.8s ease-in-out infinite; }
-        @keyframes chefe-pulsa { 50% { box-shadow:0 0 18px 5px rgba(176,140,255,.95); } }
+        /* Bigolin do mal: foto quadrada, entao vira medalhao redondo com brilho vermelho. */
+        .no-chefe-bigolin { border-radius:50%; object-fit:cover; image-rendering:auto; border:3px solid #c0392b; background:#fff;
+            box-shadow:0 0 10px 2px rgba(192,57,43,.75); animation:chefe-pulsa 1.8s ease-in-out infinite; }
+        @keyframes chefe-pulsa { 50% { box-shadow:0 0 18px 5px rgba(231,76,60,.95); } }
         @media (prefers-reduced-motion: reduce) { .no-chefe-bigolin { animation:none; } }
         .no-personagem { display:block; width:100%; height:100%; border-radius:50%; object-fit:cover; pointer-events:none; user-select:none; }
         .acessos-laterais .painel-inferior, .acessos-laterais .legenda {

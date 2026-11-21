@@ -119,6 +119,10 @@ $ehBigolinChefe = $previa !== null
     && ($previa['adversario']['nome'] ?? '') === 'Bigolin';
 $imgBigolin = 'menu inicial/images/bigolin.jpg';
 $imgDeoxysBigolin = 'menu inicial/images/deoxys_bigolin.jpg';
+// Final da historia (Arnaldo derrota o time -> Rayquaza -> Bigolin volta ao normal).
+$imgBigolinBom = 'menu inicial/images/bingolin_bom_sem_fundo.png';
+$imgRayquaza = 'menu inicial/images/rayquaza_pixel_sem_fundo.png';
+$imgArnaldo = 'images/pokemon/Armaldo.png';
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -604,6 +608,38 @@ $imgDeoxysBigolin = 'menu inicial/images/deoxys_bigolin.jpg';
         }
         .cena-pular { position: relative; z-index: 2; margin: 0; font-size: 11px; opacity: .6; }
 
+        /* ===== CENA FINAL: Arnaldo derrota o time, Rayquaza aparece e Bigolin e libertado ===== */
+        .cena-final { z-index: 1100; gap: 14px; }
+        .cena-final .cena-palco canvas { background: #000; }
+        .cena-final.treme .cena-palco { animation: cena-treme .12s linear infinite; }
+        .cena-final.raio .cena-palco canvas { border-color: #3ddc97; box-shadow: 0 0 34px 8px rgba(61, 220, 151, .65); }
+        .cena-final.livre .cena-palco canvas { border-color: #ffd54a; box-shadow: 0 0 34px 8px rgba(255, 213, 74, .7); }
+        .cena-final .cena-palco[hidden], .cena-final .cena-texto[hidden], .cena-final .cena-pular[hidden] { display: none; }
+        .final-pular-botao { position: absolute; top: 12px; right: 12px; z-index: 5; }
+        .final-fim {
+            position: relative;
+            z-index: 4;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            width: min(92vw, 520px);
+            padding: 20px 16px;
+            text-align: center;
+            border: 4px solid #ffd54a;
+            background: #14161c;
+            box-shadow: 0 0 40px 6px rgba(255, 213, 74, .35);
+            cursor: default;
+            animation: cena-entra 1.2s ease-out;
+        }
+        .final-fim[hidden] { display: none; }
+        .final-fim img { width: min(52vw, 220px); aspect-ratio: 1; object-fit: contain; image-rendering: pixelated; background: #fff; border: 3px solid #ffd54a; border-radius: 50%; }
+        .final-fim .final-titulo { margin: 0; font-size: clamp(40px, 12vw, 72px); letter-spacing: .12em; color: #ffd54a; text-shadow: 3px 3px #000; }
+        .final-fim .final-jogo { margin: 0; font-size: 13px; letter-spacing: .08em; color: #c9d1d9; }
+        .final-fim .final-msg { margin: 0; font-size: 15px; line-height: 1.5; color: #fff; }
+        .final-fim .botoes { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+        .arena.treme { animation: cena-treme .12s linear 12; }
+
         @media (prefers-reduced-motion: reduce) {
             .cena, .cena.saindo, .cena-flash.ativo { animation-duration: .01s; }
             .cena.carregando .cena-palco, .cena.dominado .cena-palco { animation: none; }
@@ -731,6 +767,30 @@ $imgDeoxysBigolin = 'menu inicial/images/deoxys_bigolin.jpg';
         <canvas id="cena-miniatura" hidden></canvas>
         <img id="cena-img-bigolin" src="<?= $escapar(str_replace(' ', '%20', $imgBigolin)) ?>" alt="" hidden>
         <img id="cena-img-deoxys" src="<?= $escapar(str_replace(' ', '%20', $imgDeoxysBigolin)) ?>" alt="" hidden>
+    </div>
+
+    <!-- Cena final: so aparece quando o Arnaldo (ultimo slot do Bigolin) entra em campo -->
+    <div class="cena cena-final" id="cena-final" hidden role="dialog" aria-label="Final do jogo">
+        <button type="button" class="botao final-pular-botao" id="final-pular">Pular ⏭</button>
+        <div class="cena-palco" id="final-palco"><canvas id="final-canvas" width="512" height="512"></canvas></div>
+        <div class="cena-texto" id="final-texto" aria-live="polite"></div>
+        <p class="cena-pular" id="final-dica">Clique para avançar</p>
+        <div class="cena-flash" id="final-flash"></div>
+        <div class="final-fim" id="final-fim" hidden>
+            <img src="<?= $escapar(str_replace(' ', '%20', $imgBigolinBom)) ?>" alt="Bigolin, livre do controle do Deoxys">
+            <h2 class="final-titulo">FIM</h2>
+            <p class="final-jogo">PEAKMON: THE BIGOLIN CRISIS</p>
+            <p class="final-msg">Rayquaza derrotou Arnaldo e Bigolin foi libertado do controle de Deoxys. Obrigado por jogar!</p>
+            <div class="botoes">
+                <a class="botao principal" href="mapa.php">Voltar ao mapa</a>
+                <a class="botao" href="menu%20inicial/menu.html">Menu inicial</a>
+            </div>
+        </div>
+        <canvas id="final-miniatura" hidden></canvas>
+        <img id="final-img-arnaldo" src="<?= $escapar(str_replace(' ', '%20', $imgArnaldo)) ?>" alt="" hidden>
+        <img id="final-img-rayquaza" src="<?= $escapar(str_replace(' ', '%20', $imgRayquaza)) ?>" alt="" hidden>
+        <img id="final-img-deoxys" src="<?= $escapar(str_replace(' ', '%20', $imgDeoxysBigolin)) ?>" alt="" hidden>
+        <img id="final-img-bom" src="<?= $escapar(str_replace(' ', '%20', $imgBigolinBom)) ?>" alt="" hidden>
     </div>
 <?php endif; ?>
 
@@ -1069,6 +1129,12 @@ $imgDeoxysBigolin = 'menu inicial/images/deoxys_bigolin.jpg';
                     if (ev.tipo === 'entra') await entra(ev);
                     else if (ev.tipo === 'ataque') await ataque(ev);
                     else if (ev.tipo === 'desmaia') await desmaia(ev);
+                    else if (ev.tipo === 'arnaldo') {
+                        // Arnaldo entrou em campo: a arena treme antes de o time inteiro cair.
+                        if (!pular && !reduzirMovimento) { arena.classList.add('treme'); }
+                        await dormir(1600);
+                        arena.classList.remove('treme');
+                    } else if (ev.tipo === 'rayquaza') await dormir(500);
                     else if (ev.tipo === 'item') {
                         times.jogador[ev.i].status = ev.status;
                         if (ev.i === (res.iJ ?? ev.i)) {
@@ -1230,13 +1296,203 @@ $imgDeoxysBigolin = 'menu inicial/images/deoxys_bigolin.jpg';
             return { aplicavel: true, tocar };
         })();
 
+        // ---------- cena final: Rayquaza derrota o Arnaldo e o Bigolin e libertado ----------
+        const CenaFinal = (function () {
+            const cena = $('cena-final');
+            // Fora do chefe Bigolin a cena nao existe e nada acontece.
+            if (!cena) return { aplicavel: false, tocar: async () => {} };
+
+            const canvas = $('final-canvas');
+            const ctx = canvas.getContext('2d');
+            const mini = $('final-miniatura');
+            const miniCtx = mini.getContext('2d');
+            const palco = $('final-palco');
+            const caixaTexto = $('final-texto');
+            const dica = $('final-dica');
+            const flash = $('final-flash');
+            const cartaoFim = $('final-fim');
+            const T = canvas.width;
+
+            let avancar = null;   // encerra a espera/animacao atual (clique, Enter ou Espaco)
+            let pularTudo = false; // botao "Pular" ou Esc: vai direto para a tela de fim
+
+            const carregar = (img) => new Promise((resolve) => {
+                if (img.complete) return resolve(img.naturalWidth > 0 ? img : null);
+                img.addEventListener('load', () => resolve(img), { once: true });
+                img.addEventListener('error', () => resolve(null), { once: true });
+            });
+
+            const fala = (texto) => { caixaTexto.textContent = texto; };
+            const facil = (t) => t * t;
+            const suave = (t) => 1 - (1 - t) * (1 - t);
+
+            // Espera um tempo, mas um clique (ou Enter/Espaco) adianta para a proxima parte.
+            const esperar = (ms) => new Promise((ok) => {
+                if (pularTudo) return ok();
+                let t = 0;
+                const fim = () => { clearTimeout(t); avancar = null; ok(); };
+                t = setTimeout(fim, reduzirMovimento ? Math.min(ms, 500) : ms);
+                avancar = fim;
+            });
+
+            // Anima de 0 a 1 em "ms"; ao pular, salta direto para o quadro final.
+            const animar = (ms, quadro) => new Promise((ok) => {
+                const duracao = reduzirMovimento ? 120 : ms;
+                let cancelado = false;
+                avancar = () => { cancelado = true; };
+                const ini = performance.now();
+                (function passo(agora) {
+                    const t = Math.min(1, (agora - ini) / duracao);
+                    if (cancelado || pularTudo || t >= 1) { quadro(1); avancar = null; return ok(); }
+                    quadro(t);
+                    requestAnimationFrame(passo);
+                })(ini);
+            });
+
+            const brilhar = () => { flash.classList.remove('ativo'); void flash.offsetWidth; flash.classList.add('ativo'); };
+            const fundo = (cor) => { ctx.fillStyle = cor; ctx.fillRect(0, 0, T, T); };
+            const figura = (img, x, y, w, h, alpha = 1) => {
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+                ctx.imageSmoothingEnabled = false;
+                ctx.drawImage(img, x, y, w, h);
+                ctx.restore();
+            };
+            // Desenha a imagem "pixelada" (bloco maior = mais quadradona), sobre fundo branco.
+            const pixelada = (img, bloco) => {
+                fundo('#ffffff');
+                ctx.imageSmoothingEnabled = false;
+                if (bloco <= 1) { ctx.drawImage(img, 0, 0, T, T); return; }
+                const n = Math.max(2, Math.round(T / bloco));
+                mini.width = n; mini.height = n;
+                miniCtx.imageSmoothingEnabled = true;
+                miniCtx.drawImage(img, 0, 0, n, n);
+                ctx.drawImage(mini, 0, 0, n, n, 0, 0, T, T);
+            };
+
+            async function tocar() {
+                const [arnaldo, rayquaza, deoxys, bom] = await Promise.all([
+                    carregar($('final-img-arnaldo')), carregar($('final-img-rayquaza')),
+                    carregar($('final-img-deoxys')), carregar($('final-img-bom')),
+                ]);
+
+                const aoClicar = () => { if (avancar) avancar(); };
+                const aoTeclar = (e) => {
+                    if (e.key === 'Escape') { e.preventDefault(); pularTudo = true; if (avancar) avancar(); }
+                    else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (avancar) avancar(); }
+                };
+                const aoPular = (e) => { e.stopPropagation(); pularTudo = true; if (avancar) avancar(); };
+                cena.addEventListener('click', aoClicar);
+                document.addEventListener('keydown', aoTeclar);
+                $('final-pular').addEventListener('click', aoPular);
+
+                cena.classList.remove('treme', 'raio', 'livre');
+                cartaoFim.hidden = true;
+                palco.hidden = false; caixaTexto.hidden = false; dica.hidden = false;
+                cena.hidden = false;
+
+                try {
+                    // Sem as imagens nao ha o que animar: vai direto para a tela de fim.
+                    if (arnaldo && rayquaza && deoxys && bom) {
+                        const fundoCeu = '#10091c';
+                        const tR = T * 0.95; // tamanho do Rayquaza no quadro
+
+                        // 1) Arnaldo domina o campo.
+                        fala('Arnaldo, o deus do universo, derrotou todos os seus Pokémon com um único gesto...');
+                        await animar(1200, (t) => {
+                            fundo(fundoCeu);
+                            figura(arnaldo, T * 0.18, T * 0.22, T * 0.64, T * 0.64, suave(t));
+                        });
+                        await esperar(2600);
+                        if (!pularTudo) { fala('Tudo parecia perdido...'); await esperar(2000); }
+
+                        // 2) Rugido nos ceus: Rayquaza desce.
+                        if (!pularTudo) {
+                            fala('Então um rugido ecoou pelos céus... É o RAYQUAZA!');
+                            cena.classList.add('treme', 'raio');
+                            brilhar();
+                            await animar(2200, (t) => {
+                                fundo('#06162a');
+                                figura(arnaldo, T * 0.08, T * 0.5, T * 0.4, T * 0.4);
+                                figura(rayquaza, T * 0.05, -tR + (tR * 0.95) * suave(t), tR, tR);
+                            });
+                            cena.classList.remove('treme');
+                            await esperar(1500);
+                        }
+
+                        // 3) Golpe unico: Arnaldo desaparece.
+                        if (!pularTudo) {
+                            fala('Rayquaza derrotou Arnaldo com um único golpe!');
+                            brilhar();
+                            cena.classList.add('treme');
+                            await animar(1600, (t) => {
+                                fundo('#06162a');
+                                const tremor = Math.sin(t * 60) * 7 * (1 - t);
+                                figura(arnaldo, T * 0.08 + tremor, T * 0.5, T * 0.4, T * 0.4, 1 - facil(t));
+                                figura(rayquaza, T * 0.05 + t * 14, -tR * 0.05 + t * 26, tR, tR);
+                            });
+                            cena.classList.remove('treme');
+                            await esperar(1600);
+                        }
+
+                        // 4) Rayquaza volta aos ceus.
+                        if (!pularTudo) {
+                            cena.classList.remove('raio');
+                            fala('Rayquaza voltou aos céus... e algo mudou em Bigolin!');
+                            await animar(1400, (t) => {
+                                fundo('#06162a');
+                                figura(rayquaza, T * 0.05 + 14, -tR * 0.05 + 26 - (tR * 1.1) * suave(t), tR, tR, 1 - t);
+                            });
+                            await esperar(900);
+                        }
+
+                        // 5) Bigolin do mal (controlado pelo Deoxys) vira o Bigolin do bem.
+                        if (!pularTudo) {
+                            pixelada(deoxys, 1);
+                            fala('O controle do Deoxys sobre o Bigolin começou a se romper...');
+                            await esperar(2000);
+                        }
+                        if (!pularTudo) {
+                            cena.classList.add('treme');
+                            await animar(2200, (t) => pixelada(deoxys, Math.max(1, Math.round(1 + 45 * facil(t)))));
+                            cena.classList.remove('treme');
+                        }
+                        if (!pularTudo) {
+                            brilhar();
+                            cena.classList.add('livre');
+                            fala('Bigolin voltou ao normal! Ele está livre!');
+                            await animar(1500, (t) => pixelada(bom, Math.max(1, Math.round(46 - 45 * suave(t)))));
+                            await esperar(2400);
+                        }
+                    }
+                } finally {
+                    cena.removeEventListener('click', aoClicar);
+                    document.removeEventListener('keydown', aoTeclar);
+                    $('final-pular').removeEventListener('click', aoPular);
+                    avancar = null;
+                    cena.classList.remove('treme', 'raio');
+                    cena.classList.add('livre');
+                    $('final-pular').hidden = true;
+                    palco.hidden = true; caixaTexto.hidden = true; dica.hidden = true;
+                    cartaoFim.hidden = false;
+                    const primeiro = cartaoFim.querySelector('a');
+                    if (primeiro) primeiro.focus();
+                }
+            }
+
+            return { aplicavel: true, tocar };
+        })();
+
         // ---------- fase 3: resultado ----------
         function mostrarResultado(res) {
             const caixa = $('fase-resultado');
             caixa.textContent = '';
             caixa.classList.toggle('derrota', res.resultado !== 'VITORIA');
 
-            if (res.resultado === 'VITORIA') {
+            if (res.final_historia) {
+                caixa.appendChild(criar('h2', '', '🏁 Fim de jogo'));
+                caixa.appendChild(criar('p', '', 'Arnaldo derrotou o seu time, mas Rayquaza o derrotou e libertou Bigolin do controle de Deoxys. Seus Pokémon foram recuperados.'));
+            } else if (res.resultado === 'VITORIA') {
                 caixa.appendChild(criar('h2', '', '🏆 Vitória!'));
                 caixa.appendChild(criar('div', 'ouro', '+' + res.dinheiro_ganho + ' Pokédollars'));
                 if (res.area_concluida) {
@@ -1359,6 +1615,8 @@ $imgDeoxysBigolin = 'menu inicial/images/deoxys_bigolin.jpg';
                         pausado = true;
                         painel.hidden = true;
                         $('voltar-mapa').hidden = false;
+                        // Final da historia: Rayquaza derrota o Arnaldo e a tela de fim de jogo assume.
+                        if (res.final_historia) await CenaFinal.tocar();
                         mostrarResultado(res);
                         texto.textContent = 'Batalha concluída.';
                     } else {

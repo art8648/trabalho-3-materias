@@ -56,6 +56,9 @@ class Batalha
         'CHEFE' => [1200, 1500],
     ];
 
+    /** Especie que fecha o time do Bigolin e dispara o final da historia. */
+    private const NOME_ARNALDO = 'Arnaldo';
+
     /** Nome exibido para Pokemon selvagens (tambem usado para escolher a frase de entrada). */
     private const NOME_SELVAGEM = 'Pokémon selvagem';
 
@@ -619,6 +622,14 @@ class Batalha
                 }
             }
 
+            // Arnaldo (ultimo slot do Bigolin) acabou de entrar: ele derrota o time inteiro
+            // e o Rayquaza encerra a historia. Nao e uma derrota normal (o perfil nao reinicia).
+            $finalHistoria = false;
+            if ($this->arnaldoAcabouDeEntrar($estado)) {
+                $this->aplicarFinalDaHistoria($estado, $eventos);
+                $finalHistoria = true;
+            }
+
             $this->gravarHpDoTime($idPerfil, $estado['jogador']);
             $acabou = $estado['iI'] >= count($estado['inimigo']) ||
                       $estado['iJ'] >= count($estado['jogador']) ||
@@ -638,13 +649,16 @@ class Batalha
                     && $estado['iJ'] >= count($estado['jogador']);
                 $eventos[] = [
                     'tipo' => 'fim', 'turno' => $estado['turno'], 'resultado' => $resultadoFinal,
-                    'msg' => $resultadoFinal === 'VITORIA' ? 'Você venceu a batalha!' : 'Todos os seus Pokémon desmaiaram...',
+                    'msg' => $finalHistoria
+                        ? 'O mundo foi salvo por Rayquaza. Fim de jogo.'
+                        : ($resultadoFinal === 'VITORIA' ? 'Você venceu a batalha!' : 'Todos os seus Pokémon desmaiaram...'),
                 ];
             }
             // Cada rodada e seu log sao commitados juntos; a session guarda apenas o estado.
             $this->gravarLog($estado['id_batalha'], $eventos, $estado['jogador'], $estado['inimigo']);
             if ($acabou) {
-                if ($resultadoFinal === 'VITORIA') {
+                // No final da historia quem venceu foi o Rayquaza: sem premio em dinheiro.
+                if ($resultadoFinal === 'VITORIA' && !$finalHistoria) {
                     [$minimo, $maximo] = self::OURO[$estado['categoria']];
                     $ouro = random_int($minimo, $maximo);
                 }
@@ -653,6 +667,14 @@ class Batalha
                 $encerrar->execute(['resultado' => $resultadoFinal, 'ouro' => $ouro, 'id' => $estado['id_batalha']]);
                 if ($encerrar->rowCount() !== 1) throw new DomainException('Nao foi possivel finalizar a batalha.');
                 if ($resultadoFinal !== 'VITORIA' && !$perdeuTudo && self::CURAR_TIME_AO_PERDER) {
+                    $this->curarTime($idPerfil);
+                    $timeCurado = true;
+                }
+                if ($finalHistoria) {
+                    // Jogo concluido (creditos) e o time volta com a saude cheia para quem quiser continuar explorando.
+                    $this->pdo->prepare('UPDATE perfil SET jogo_concluido = TRUE,
+                        data_conclusao = COALESCE(data_conclusao, CURRENT_TIMESTAMP) WHERE id = :perfil')
+                        ->execute(['perfil' => $idPerfil]);
                     $this->curarTime($idPerfil);
                     $timeCurado = true;
                 }
@@ -678,6 +700,10 @@ class Batalha
                         'Chefe ' . $nomeAdversario . ' derrotado.' .
                         ($areaConcluida ? ' Area concluida e nova area desbloqueada.' : ''));
                 }
+                if ($finalHistoria) {
+                    $historico->registrar($idPerfil, 'JOGO_CONCLUIDO',
+                        'Arnaldo derrotou o time inteiro, Rayquaza o derrotou e Bigolin foi libertado do controle de Deoxys.');
+                }
             }
             $saldo = $this->pdo->prepare('SELECT dinheiro FROM perfil WHERE id = :perfil');
             $saldo->execute(['perfil' => $idPerfil]);
@@ -702,6 +728,7 @@ class Batalha
                     'pedras' => $pedras,
                     'area_concluida' => $areaConcluida,
                     'time_curado' => $timeCurado,
+                    'final_historia' => $finalHistoria,
                     'perfil_reiniciado' => $perdeuTudo,
                     'redirecionar' => $perdeuTudo ? self::PAGINA_SELECAO : null,
                 ];
@@ -714,6 +741,56 @@ class Batalha
             if ($this->pdo->inTransaction()) $this->pdo->rollBack();
             throw $erro;
         }
+    }
+
+    /** True quando o Arnaldo do Bigolin e o inimigo ativo e o jogador ainda tinha Pokemon de pe. */
+    private function arnaldoAcabouDeEntrar(array $estado): bool
+    {
+        if (!$this->ehChefeBigolin((string) $estado['categoria'], (array) $estado['adversario'])) {
+            return false;
+        }
+        if ($estado['iI'] >= count($estado['inimigo']) || $estado['iJ'] >= count($estado['jogador'])) {
+            return false;
+        }
+
+        return ($estado['inimigo'][$estado['iI']]['nome'] ?? '') === self::NOME_ARNALDO;
+    }
+
+    /**
+     * Arnaldo derruba todos os Pokemon do jogador; o Rayquaza (shiny, como pede o banco)
+     * derrota o Arnaldo. A cena e o final de jogo ficam por conta do navegador.
+     */
+    private function aplicarFinalDaHistoria(array &$estado, array &$eventos): void
+    {
+        $turno = (int) $estado['turno'];
+        $iArnaldo = (int) $estado['iI'];
+
+        $eventos[] = [
+            'tipo' => 'arnaldo', 'turno' => $turno, 'lado' => 'inimigo', 'i' => $iArnaldo,
+            'msg' => 'Arnaldo, o deus do universo, ergueu a mão... Uma luz absoluta cobriu o campo de batalha!',
+        ];
+
+        foreach ($estado['jogador'] as $i => $lutador) {
+            if ($lutador['hp'] <= 0) {
+                continue;
+            }
+            $estado['jogador'][$i]['hp'] = 0;
+            $estado['jogador'][$i]['desmaiado'] = true;
+            $estado['jogador'][$i]['status'] = null;
+            $eventos[] = $this->eventoDesmaio('jogador', $i, $estado['jogador'][$i], $turno);
+        }
+        $estado['iJ'] = count($estado['jogador']);
+
+        $eventos[] = [
+            'tipo' => 'rayquaza', 'turno' => $turno, 'lado' => 'inimigo', 'i' => $iArnaldo,
+            'pk_atacante' => $this->idDaEspecie('Rayquaza'),
+            'pk_alvo' => $estado['inimigo'][$iArnaldo]['id_pokemon'],
+            'msg' => 'Rayquaza desceu dos céus e derrotou Arnaldo com um único golpe!',
+        ];
+        $estado['inimigo'][$iArnaldo]['hp'] = 0;
+        $estado['inimigo'][$iArnaldo]['desmaiado'] = true;
+        // Arnaldo e o ultimo slot: com ele fora, o time do Bigolin acabou.
+        $estado['iI'] = count($estado['inimigo']);
     }
 
     /** Mesmo efeito do botao "Reiniciar perfil" do mapa.php (apaga o progresso so deste perfil). */
@@ -985,21 +1062,28 @@ class Batalha
     {
         $inserir = $this->pdo->prepare('
             INSERT INTO log_batalha
-                (id_batalha, turno, tipo_evento, mensagem, id_pokemon_atacante, id_pokemon_alvo, dano)
+                (id_batalha, turno, tipo_evento, mensagem, id_pokemon_atacante, id_pokemon_alvo, dano, atacante_shiny)
             VALUES
-                (:batalha, :turno, :tipo, :msg, :atacante, :alvo, :dano)
+                (:batalha, :turno, :tipo, :msg, :atacante, :alvo, :dano, :shiny)
         ');
 
         $nomes = ['entra' => 'ENTRADA', 'ataque' => 'ATAQUE', 'desmaia' => 'DESMAIO', 'fim' => 'FIM',
                   'item' => 'ITEM', 'status' => 'STATUS', 'efeito_status' => 'STATUS_DANO',
-                  'inicio' => 'INICIO_BATALHA', 'sistema' => 'IMPASSE'];
+                  'inicio' => 'INICIO_BATALHA', 'sistema' => 'IMPASSE',
+                  'arnaldo' => 'ARNALDO_EXTERMINIO', 'rayquaza' => 'RAYQUAZA_HITKILL'];
 
         foreach ($eventos as $evento) {
             $atacante = null;
             $alvo = null;
             $dano = null;
+            $shiny = 0;
 
-            if ($evento['tipo'] === 'ataque') {
+            if ($evento['tipo'] === 'rayquaza') {
+                $atacante = $evento['pk_atacante'];
+                $alvo = $evento['pk_alvo'];
+                // O banco so aceita shiny quando o atacante e o Rayquaza.
+                $shiny = $atacante !== null ? 1 : 0;
+            } elseif ($evento['tipo'] === 'ataque') {
                 $atacante = $evento['pk_atacante'];
                 $alvo = $evento['pk_alvo'];
                 $dano = $evento['dano'];
@@ -1020,6 +1104,7 @@ class Batalha
                 'atacante' => $atacante,
                 'alvo' => $alvo,
                 'dano' => $dano,
+                'shiny' => $shiny,
             ]);
         }
     }
@@ -1278,7 +1363,12 @@ class Batalha
         $guardado = $_SESSION['peakmon_encontro'][$chave] ?? null;
 
         if (is_array($guardado) && isset($guardado['inimigos'], $guardado['adversario'], $guardado['categoria'], $guardado['fator'])) {
-            return $guardado;
+            // Encontro sorteado antes desta regra: o Bigolin precisa ter o Arnaldo por ultimo.
+            $ultimo = $guardado['inimigos'] === [] ? null : end($guardado['inimigos']);
+            $arnaldoNoFim = is_array($ultimo) && ($ultimo['nome'] ?? '') === self::NOME_ARNALDO;
+            if (!$this->ehChefeBigolin((string) $guardado['categoria'], (array) $guardado['adversario']) || $arnaldoNoFim) {
+                return $guardado;
+            }
         }
 
         $encontro = $this->gerarEncontro($ctx, $equipe);
@@ -1332,6 +1422,13 @@ class Batalha
         $forcaMedia = $equipe === [] ? 300.0 : $somaForca / count($equipe);
         $alvo = $forcaMedia * $multiplicador;
 
+        $adversario = $this->descreverAdversario($ctx, $categoria);
+        // Chefe Bigolin (Area 2): o ultimo slot e SEMPRE o Arnaldo; os outros sao sorteados.
+        $ehBigolin = $this->ehChefeBigolin($categoria, $adversario);
+        if ($ehBigolin) {
+            $quantidade--;
+        }
+
         $especies = $this->carregarEspeciesSelvagens();
         if ($especies === []) {
             throw new DomainException('Nenhuma especie disponivel para montar o adversario.');
@@ -1349,13 +1446,50 @@ class Batalha
         foreach ($escolhidas as $especie) {
             $inimigos[] = $this->criarLutador($especie['linha']);
         }
+        if ($ehBigolin) {
+            $inimigos[] = $this->criarLutador($this->carregarEspecieArnaldo());
+        }
 
         return [
             'categoria' => $categoria,
             'fator' => $fator,
-            'adversario' => $this->descreverAdversario($ctx, $categoria),
+            'adversario' => $adversario,
             'inimigos' => $inimigos,
         ];
+    }
+
+    /** O chefe da Area 2 e o unico personagem chamado Bigolin que lidera uma batalha de CHEFE. */
+    private function ehChefeBigolin(string $categoria, array $adversario): bool
+    {
+        return $categoria === 'CHEFE' && ($adversario['nome_db'] ?? $adversario['nome'] ?? '') === 'Bigolin';
+    }
+
+    /** Linha da especie personalizada Arnaldo (nao e capturavel nem tem api_id, entao fica fora do sorteio). */
+    private function carregarEspecieArnaldo(): array
+    {
+        $consulta = $this->pdo->prepare('
+            SELECT' . self::COLUNAS_ESPECIE . '
+            FROM pokemon p
+            INNER JOIN tipo_pokemon t ON t.id = p.tipo_id
+            WHERE p.nome = :nome
+            LIMIT 1
+        ');
+        $consulta->execute(['nome' => self::NOME_ARNALDO]);
+        $linha = $consulta->fetch();
+        if ($linha === false) {
+            throw new DomainException('A especie Arnaldo nao existe no banco. Importe o peakmon_base.sql novamente.');
+        }
+
+        return $linha;
+    }
+
+    private function idDaEspecie(string $nome): ?int
+    {
+        $consulta = $this->pdo->prepare('SELECT id FROM pokemon WHERE nome = :nome LIMIT 1');
+        $consulta->execute(['nome' => $nome]);
+        $id = $consulta->fetchColumn();
+
+        return $id === false ? null : (int) $id;
     }
 
     private function forcaBase(array $lutador): int
