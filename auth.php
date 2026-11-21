@@ -48,27 +48,13 @@ if (($resultado['sucesso'] ?? false) === true
     exit;
 }
 
-$titulo = 'Não foi possível continuar';
+// Falhou: nao mostra uma pagina separada. Guarda a mensagem na sessao e volta
+// para a tela de login, que exibe o aviso em cima do formulario correto.
+$_SESSION['aviso_login'] = [
+    'acao' => $acao === 'registrar' ? 'registrar' : 'entrar',
+    'mensagem' => (string) ($resultado['mensagem'] ?? 'Erro desconhecido.'),
+    'nome' => $nome,
+];
 
-$mensagem = htmlspecialchars(
-    (string) ($resultado['mensagem'] ?? 'Erro desconhecido.'),
-    ENT_QUOTES,
-    'UTF-8'
-);
-?>
-
-<!DOCTYPE html>
-<html lang="pt-br">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= $titulo ?></title>
-</head>
-<body>
-    <h1><?= $titulo ?></h1>
-    <p><?= $mensagem ?></p>
-    <a href="login.php">
-        Voltar ao cadastro ou login
-    </a>
-</body>
-</html>
+header('Location: login.php');
+exit;

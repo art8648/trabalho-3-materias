@@ -112,6 +112,13 @@ if ($previa !== null) {
         'itens' => (new Mochila($pdo))->listarItens($idPerfil, $idUsuario),
     ];
 }
+
+// Chefe da Area 2: Bigolin se transforma em Deoxys Bigolin antes da luta.
+$ehBigolinChefe = $previa !== null
+    && $previa['categoria'] === 'CHEFE'
+    && ($previa['adversario']['nome'] ?? '') === 'Bigolin';
+$imgBigolin = 'menu inicial/images/bigolin.jpg';
+$imgDeoxysBigolin = 'menu inicial/images/deoxys_bigolin.jpg';
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -499,6 +506,110 @@ if ($previa !== null) {
             .placa { font-size: 11px; width: min(52%, 220px); }
         }
 
+        /* ===== CENA DO CHEFE: Bigolin vira Deoxys Bigolin ===== */
+
+        .retrato-chefe {
+            width: 54px;
+            height: 54px;
+            flex: none;
+            object-fit: cover;
+            border: 2px solid #34383a;
+            border-radius: 50%;
+            background: #000;
+        }
+        .retrato-chefe.dominado { border-color: #7a4cd6; box-shadow: 0 0 10px 2px rgba(150, 100, 255, .7); }
+
+        .cena {
+            position: fixed;
+            inset: 0;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 18px;
+            padding: 16px;
+            background: #000;
+            color: #fff;
+            cursor: pointer;
+            overflow: hidden;
+            animation: cena-entra .5s ease-out;
+        }
+        .cena[hidden] { display: none !important; }
+        .cena.saindo { animation: cena-sai .6s ease-in forwards; }
+        @keyframes cena-entra { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes cena-sai { to { opacity: 0; } }
+
+        /* Aura roxa atras do chefe: cresce durante a transformacao. */
+        .cena-aura {
+            position: absolute;
+            left: 50%;
+            top: 42%;
+            width: min(90vw, 620px);
+            aspect-ratio: 1;
+            transform: translate(-50%, -50%) scale(.4);
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(160, 100, 255, .85) 0%, rgba(90, 60, 200, .35) 40%, transparent 70%);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 1.4s ease-in, transform 1.8s ease-in;
+        }
+        .cena.carregando .cena-aura { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
+        .cena.dominado .cena-aura { opacity: .75; transform: translate(-50%, -50%) scale(1); transition: opacity 1s, transform 1s; }
+
+        .cena-palco { position: relative; z-index: 1; width: min(78vw, 46vh, 430px); aspect-ratio: 1; }
+        .cena-palco canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            image-rendering: pixelated;
+            border: 4px solid #3b3f46;
+            transition: border-color 1s, filter .2s;
+        }
+        .cena.carregando .cena-palco canvas { border-color: #9a6bff; }
+        .cena.carregando .cena-palco { animation: cena-treme .12s linear infinite; }
+        .cena.dominado .cena-palco canvas { border-color: #b08cff; }
+        .cena.dominado .cena-palco { animation: cena-flutua 2.2s ease-in-out infinite; }
+        @keyframes cena-treme {
+            0% { transform: translate(0, 0); } 25% { transform: translate(-4px, 2px); }
+            50% { transform: translate(3px, -3px); } 75% { transform: translate(-2px, -2px); }
+            100% { transform: translate(0, 0); }
+        }
+        @keyframes cena-flutua { 50% { transform: translateY(-10px); } }
+
+        .cena-flash {
+            position: absolute;
+            inset: 0;
+            z-index: 3;
+            background: #fff;
+            opacity: 0;
+            pointer-events: none;
+        }
+        .cena-flash.ativo { animation: cena-flash .7s ease-out; }
+        @keyframes cena-flash { 0% { opacity: 0; } 15% { opacity: 1; } 100% { opacity: 0; } }
+
+        .cena-texto {
+            position: relative;
+            z-index: 2;
+            width: min(92vw, 560px);
+            min-height: 3.4em;
+            padding: 10px 14px;
+            border: 3px solid #292e31;
+            background: #eee9dc;
+            box-shadow: 3px 3px #42484b;
+            color: #20252a;
+            font-size: 15px;
+            line-height: 1.5;
+            text-align: center;
+        }
+        .cena-pular { position: relative; z-index: 2; margin: 0; font-size: 11px; opacity: .6; }
+
+        @media (prefers-reduced-motion: reduce) {
+            .cena, .cena.saindo, .cena-flash.ativo { animation-duration: .01s; }
+            .cena.carregando .cena-palco, .cena.dominado .cena-palco { animation: none; }
+            .cena-aura { transition: none; }
+        }
+
         @media (prefers-reduced-motion: reduce) {
             .sprite, .flutuante { animation: none !important; }
             .barra > span, .fila .chip, .sprite.fora { transition: none; }
@@ -542,8 +653,11 @@ if ($previa !== null) {
                 <div class="painel">
                     <h2>Adversário</h2>
                     <div class="adversario-cabeca">
+                        <?php if ($ehBigolinChefe): ?>
+                            <img class="retrato-chefe" id="retrato-chefe" src="<?= $escapar(str_replace(' ', '%20', $imgBigolin)) ?>" alt="Bigolin">
+                        <?php endif; ?>
                         <span class="emoji" aria-hidden="true"><?= $escapar($previa['adversario']['emoji']) ?></span>
-                        <span><?= $escapar($previa['adversario']['nome']) ?></span>
+                        <span id="nome-adversario"><?= $escapar($previa['adversario']['nome']) ?></span>
                     </div>
                     <ol class="lista" id="lista-inimigos"></ol>
                 </div>
@@ -604,6 +718,21 @@ if ($previa !== null) {
         <!-- 3) Resultado -->
         <section id="fase-resultado" class="painel resultado" hidden></section>
     </main>
+
+<?php if ($ehBigolinChefe): ?>
+    <!-- Cena: Bigolin se transforma em Deoxys Bigolin (toque/clique para pular) -->
+    <div class="cena" id="cena-chefe" hidden role="dialog" aria-label="Transformação do chefe">
+        <div class="cena-aura"></div>
+        <div class="cena-palco"><canvas id="cena-canvas" width="512" height="512"></canvas></div>
+        <div class="cena-texto" id="cena-texto" aria-live="polite"></div>
+        <p class="cena-pular">Clique para pular</p>
+        <div class="cena-flash" id="cena-flash"></div>
+        <!-- Elementos de apoio da animacao (ficam escondidos) -->
+        <canvas id="cena-miniatura" hidden></canvas>
+        <img id="cena-img-bigolin" src="<?= $escapar(str_replace(' ', '%20', $imgBigolin)) ?>" alt="" hidden>
+        <img id="cena-img-deoxys" src="<?= $escapar(str_replace(' ', '%20', $imgDeoxysBigolin)) ?>" alt="" hidden>
+    </div>
+<?php endif; ?>
 
 <template id="modelos-batalha">
     <div data-tag="div"></div><span data-tag="span"></span>
@@ -980,6 +1109,127 @@ if ($previa !== null) {
             return { reproduzir };
         })();
 
+        // ---------- cena do chefe: Bigolin vira Deoxys Bigolin ----------
+        const CenaChefe = (function () {
+            const cena = $('cena-chefe');
+            // Fora da Area 2 (ou sem o chefe Bigolin) a cena nao existe e nada acontece.
+            if (!cena) return { aplicavel: false, tocar: async () => {} };
+
+            const SRC_DEOXYS = $('cena-img-deoxys').getAttribute('src');
+            const canvas = $('cena-canvas');
+            const ctx = canvas.getContext('2d');
+            const miniatura = $('cena-miniatura');
+            const miniCtx = miniatura.getContext('2d');
+            const caixaTexto = $('cena-texto');
+            const flash = $('cena-flash');
+            const T = canvas.width;
+
+            // Espera a imagem (que ja esta no HTML) terminar de carregar.
+            function carregar(img) {
+                return new Promise((resolve) => {
+                    if (img.complete) return resolve(img.naturalWidth > 0 ? img : null);
+                    img.addEventListener('load', () => resolve(img), { once: true });
+                    img.addEventListener('error', () => resolve(null), { once: true });
+                });
+            }
+
+            // Desenha a imagem "pixelada": quanto maior o bloco, mais quadradona fica.
+            function desenhar(img, bloco) {
+                ctx.imageSmoothingEnabled = false;
+                ctx.clearRect(0, 0, T, T);
+                if (bloco <= 1) { ctx.drawImage(img, 0, 0, T, T); return; }
+                const n = Math.max(2, Math.round(T / bloco));
+                miniatura.width = n; miniatura.height = n;
+                miniCtx.imageSmoothingEnabled = true;
+                miniCtx.drawImage(img, 0, 0, n, n);
+                ctx.drawImage(miniatura, 0, 0, n, n, 0, 0, T, T);
+            }
+
+            const facil = (t) => t * t;              // acelera
+            const suave = (t) => 1 - (1 - t) * (1 - t); // desacelera
+
+            async function tocar() {
+                const [imgBigolin, imgDeoxys] = await Promise.all([carregar($('cena-img-bigolin')), carregar($('cena-img-deoxys'))]);
+                if (!imgBigolin || !imgDeoxys) return; // sem imagem: segue direto para a luta
+
+                let pular = false;
+                const aoPular = () => { pular = true; };
+                cena.addEventListener('click', aoPular);
+                const aoTeclar = (e) => { if (['Enter', ' ', 'Escape'].includes(e.key)) { e.preventDefault(); pular = true; } };
+                document.addEventListener('keydown', aoTeclar);
+
+                // Tempos (ms): fala 1 -> tremor + pixelizacao -> flash/troca -> Deoxys se forma -> fala final.
+                const T_FALA = 2000, T_MORFA = 2200, T_FORMA = 1500, T_FINAL = 2200;
+                const rapido = reduzirMovimento;
+
+                const fala = (texto) => { caixaTexto.textContent = texto; };
+                const esperar = (ms) => new Promise((ok) => {
+                    const ini = performance.now();
+                    (function passo() {
+                        if (pular || performance.now() - ini >= ms) return ok();
+                        requestAnimationFrame(passo);
+                    })();
+                });
+                // Anima o tamanho do bloco de um valor ate outro, quadro a quadro.
+                const animarBloco = (img, de, ate, ms, curva) => new Promise((ok) => {
+                    const ini = performance.now();
+                    (function passo(agora) {
+                        const t = Math.min(1, (agora - ini) / ms);
+                        desenhar(img, Math.round(de + (ate - de) * curva(t)));
+                        if (pular || t >= 1) return ok();
+                        requestAnimationFrame(passo);
+                    })(ini);
+                });
+
+                cena.classList.remove('carregando', 'dominado', 'saindo');
+                cena.hidden = false;
+                desenhar(imgBigolin, 1);
+
+                try {
+                    fala('Bigolin: "Então você chegou até aqui, treinador..."');
+                    await esperar(rapido ? 800 : T_FALA);
+
+                    if (!pular) {
+                        fala('Mas... algo estranho está acontecendo com o Bigolin!');
+                        cena.classList.add('carregando');
+                        if (!rapido) await animarBloco(imgBigolin, 1, 46, T_MORFA, facil);
+                        else await esperar(600);
+                    }
+
+                    if (!pular) {
+                        flash.classList.add('ativo');
+                        desenhar(imgDeoxys, 46);
+                        fala('Deoxys tomou o controle do Bigolin!');
+                        cena.classList.remove('carregando');
+                        cena.classList.add('dominado');
+                        if (!rapido) await animarBloco(imgDeoxys, 46, 1, T_FORMA, suave);
+                        else await esperar(400);
+                        await esperar(rapido ? 800 : T_FINAL);
+                    }
+                } finally {
+                    // Sempre termina mostrando o Deoxys Bigolin, mesmo se a cena foi pulada.
+                    desenhar(imgDeoxys, 1);
+                    cena.removeEventListener('click', aoPular);
+                    document.removeEventListener('keydown', aoTeclar);
+                    cena.classList.add('saindo');
+                    await new Promise((ok) => setTimeout(ok, rapido ? 20 : 600));
+                    cena.hidden = true;
+                    cena.classList.remove('saindo', 'carregando', 'dominado');
+                    flash.classList.remove('ativo');
+                }
+
+                // A previa passa a mostrar o chefe ja transformado.
+                const retrato = $('retrato-chefe');
+                if (retrato) { retrato.src = SRC_DEOXYS; retrato.alt = 'Deoxys Bigolin'; retrato.classList.add('dominado'); }
+                const nome = $('nome-adversario');
+                if (nome) nome.textContent = 'Bigolin (controlado por Deoxys)';
+                const sub = $('subtitulo');
+                if (sub) sub.textContent = '⭐ Bigolin (controlado por Deoxys)';
+            }
+
+            return { aplicavel: true, tocar };
+        })();
+
         // ---------- fase 3: resultado ----------
         function mostrarResultado(res) {
             const caixa = $('fase-resultado');
@@ -1130,6 +1380,8 @@ if ($previa !== null) {
                 if (processando || comecou) return;
                 botao.disabled = true;
                 Previa.bloquear(true);
+                // Chefe da Area 2: antes da luta, Bigolin se transforma em Deoxys Bigolin.
+                if (CenaChefe.aplicavel) await CenaChefe.tocar();
                 dica.textContent = 'Preparando os lutadores...';
                 $('voltar-mapa').hidden = true;
                 await executar('iniciar');

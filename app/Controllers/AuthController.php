@@ -54,7 +54,7 @@ class AuthController{
         $usuario = $this->usuario->buscarPorNome($nome);
 
         if($usuario === null || !password_verify($senha, $usuario['senha_hash'])){
-            return['sucesso' => false, 'mensagem' => 'Nome ou senha incorretos.'];
+            return['sucesso' => false, 'mensagem' => 'Senha ou nome do perfil está errado.'];
         }
         if (session_status() === PHP_SESSION_NONE){
             session_start();
