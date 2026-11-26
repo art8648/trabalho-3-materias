@@ -7,7 +7,7 @@ if (!defined('PEAKMON_ROOT')) {
 }
 
 
-require_once PEAKMON_ROOT . '/app/iniciar_sessao.php';
+require PEAKMON_ROOT . '/app/iniciar_sessao.php';
 
 if (!empty($_SESSION['usuario_id']) && (int) $_SESSION['usuario_id'] > 0) {
     header('Location: index.php?pagina=perfis');

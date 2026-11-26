@@ -9,9 +9,8 @@ if (!defined('PEAKMON_ROOT')) {
 
 use Peakmon\Models\Loja;
 
-require_once PEAKMON_ROOT . '/app/sessao.php';
-require_once PEAKMON_ROOT . '/app/autoload.php';
-require_once PEAKMON_ROOT . '/app/Models/Loja.php';
+require PEAKMON_ROOT . '/app/sessao.php';
+require PEAKMON_ROOT . '/app/autoload.php';
 
 if (!isset($_SESSION['usuario_id'], $_SESSION['perfil_id'])) {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {

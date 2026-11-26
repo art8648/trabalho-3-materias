@@ -9,8 +9,8 @@ if (!defined('PEAKMON_ROOT')) {
 
 use Peakmon\Controllers\AuthController;
 
-require_once PEAKMON_ROOT . '/app/iniciar_sessao.php';
-require_once PEAKMON_ROOT . '/app/autoload.php';
+require PEAKMON_ROOT . '/app/iniciar_sessao.php';
+require PEAKMON_ROOT . '/app/autoload.php';
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
     http_response_code(405);

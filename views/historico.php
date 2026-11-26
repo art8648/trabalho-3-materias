@@ -7,8 +7,8 @@ if (!defined('PEAKMON_ROOT')) {
 }
 
 
-require_once PEAKMON_ROOT . '/app/sessao.php';
-require_once PEAKMON_ROOT . '/app/autoload.php';
+require PEAKMON_ROOT . '/app/sessao.php';
+require PEAKMON_ROOT . '/app/autoload.php';
 
 if (!isset($_SESSION['usuario_id'], $_SESSION['perfil_id'])) {
     header('Location: index.php?pagina=perfis');

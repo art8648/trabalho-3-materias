@@ -7,14 +7,14 @@ if (!defined('PEAKMON_ROOT')) {
 }
 
 
-require_once PEAKMON_ROOT . '/app/sessao.php';
+require PEAKMON_ROOT . '/app/sessao.php';
 
 if (!isset($_SESSION['perfil_id']) || $_SERVER['REQUEST_METHOD'] !== 'POST') {
     header('Location: index.php?pagina=perfis');
     exit;
 }
 
-require_once PEAKMON_ROOT . '/app/autoload.php';
+require PEAKMON_ROOT . '/app/autoload.php';
 
 $nome = trim((string) ($_POST['personagem'] ?? ''));
 $pdo = require PEAKMON_ROOT . '/config/database.php';

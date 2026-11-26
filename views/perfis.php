@@ -9,8 +9,8 @@ if (!defined('PEAKMON_ROOT')) {
 
 use Peakmon\Controllers\PerfilController;
 
-require_once PEAKMON_ROOT . '/app/autoload.php';
-require_once PEAKMON_ROOT . '/app/sessao.php';
+require PEAKMON_ROOT . '/app/autoload.php';
+require PEAKMON_ROOT . '/app/sessao.php';
 
 $erro = '';
 $perfis = [];

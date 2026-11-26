@@ -7,7 +7,7 @@ if (!defined('PEAKMON_ROOT')) {
 }
 
 
-require_once PEAKMON_ROOT . '/app/iniciar_sessao.php';
+require PEAKMON_ROOT . '/app/iniciar_sessao.php';
 
 // Apaga os dados da sessão no servidor.
 $_SESSION = [];

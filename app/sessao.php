@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-require_once __DIR__ . '/iniciar_sessao.php';
+require __DIR__ . '/iniciar_sessao.php';
 
 // Não existe login automático: páginas protegidas exigem usuário autenticado.
 if (empty($_SESSION['usuario_id']) || (int) $_SESSION['usuario_id'] <= 0) {

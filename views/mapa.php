@@ -14,8 +14,8 @@ use Peakmon\Models\Captura;
 use Peakmon\Models\Perfil;
 use Peakmon\Models\SinalEstranho;
 
-require_once PEAKMON_ROOT . '/app/sessao.php';
-require_once PEAKMON_ROOT . '/app/autoload.php';
+require PEAKMON_ROOT . '/app/sessao.php';
+require PEAKMON_ROOT . '/app/autoload.php';
 
 $ehPost = $_SERVER['REQUEST_METHOD'] === 'POST';
 

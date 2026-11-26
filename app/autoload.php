@@ -9,6 +9,6 @@ void{
     $caminho = __DIR__ . '/' . str_replace('\\', '/', $nomeArquivo) . '.php';
 
     if (is_file($caminho)){
-        require_once $caminho;
+        require $caminho;
     }
 });
