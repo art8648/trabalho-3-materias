@@ -1113,19 +1113,19 @@ INSERT INTO tipo_efetividade (tipo_atacante_id, tipo_defensor_id, multiplicador)
 
 -- Itens minimos exigidos pelo trabalho. Precos sao valores iniciais sugeridos.
 INSERT INTO item (nome, descricao, preco, tipo_efeito, valor_efeito, status_curado) VALUES
-('Potion','Recupera 20 HP.',300,'CURA_HP',20,NULL),
-('Super Potion','Recupera 50 HP.',700,'CURA_HP',50,NULL),
-('Hyper Potion','Recupera 200 HP.',1200,'CURA_HP',200,NULL),
-('Max Potion','Recupera 100% do HP.',2500,'CURA_TOTAL',100,NULL),
-('Full Restore','Recupera 100% do HP e cura todos os status.',3000,'CURA_TOTAL',100,'TODOS'),
-('Antidote','Cura envenenamento.',200,'CURA_STATUS',NULL,'VENENO'),
-('Burn Heal','Cura queimadura.',200,'CURA_STATUS',NULL,'QUEIMADURA'),
-('Ice Heal','Cura congelamento.',200,'CURA_STATUS',NULL,'CONGELAMENTO'),
-('Awakening','Cura sono.',200,'CURA_STATUS',NULL,'SONO'),
-('Paralyze Heal','Cura paralisia.',200,'CURA_STATUS',NULL,'PARALISIA'),
-('Full Heal','Cura todas as condicoes de status.',600,'CURA_STATUS',NULL,'TODOS'),
-('Revive','Revive um Pokemon desmaiado com 50% do HP.',1500,'REVIVER',50,NULL),
-('Pedra Universal','Pode evoluir qualquer especie que tenha uma regra de evolucao cadastrada.',2000,'PEDRA_EVOLUCAO',NULL,NULL);
+('Potion','Recupera 20 HP.',50,'CURA_HP',20,NULL),
+('Super Potion','Recupera 50 HP.',100,'CURA_HP',50,NULL),
+('Hyper Potion','Recupera 200 HP.',180,'CURA_HP',200,NULL),
+('Max Potion','Recupera 100% do HP.',250,'CURA_TOTAL',100,NULL),
+('Full Restore','Recupera 100% do HP e cura todos os status.',300,'CURA_TOTAL',100,'TODOS'),
+('Antidote','Cura envenenamento.',30,'CURA_STATUS',NULL,'VENENO'),
+('Burn Heal','Cura queimadura.',30,'CURA_STATUS',NULL,'QUEIMADURA'),
+('Ice Heal','Cura congelamento.',30,'CURA_STATUS',NULL,'CONGELAMENTO'),
+('Awakening','Cura sono.',30,'CURA_STATUS',NULL,'SONO'),
+('Paralyze Heal','Cura paralisia.',30,'CURA_STATUS',NULL,'PARALISIA'),
+('Full Heal','Cura todas as condicoes de status.',80,'CURA_STATUS',NULL,'TODOS'),
+('Revive','Revive um Pokemon desmaiado com 50% do HP.',150,'REVIVER',50,NULL),
+('Pedra Universal','Pode evoluir qualquer especie que tenha uma regra de evolucao cadastrada.',1500,'PEDRA_EVOLUCAO',NULL,NULL);
 INSERT INTO personagem (nome, jogavel, secreto, imagem) VALUES
 ('Link', TRUE, FALSE, 'menu inicial/images/link.jpg'),
 ('The Knight', TRUE, FALSE, 'menu inicial/images/knight.jpg'),
